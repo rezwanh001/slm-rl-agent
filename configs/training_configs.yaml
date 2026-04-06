@@ -1,0 +1,389 @@
+# Training Configurations for SLM-RL-Agent
+# This file defines hyperparameters for all training stages
+
+# ============================================
+# General Training Settings
+# ============================================
+general:
+  # Random seed for reproducibility
+  seed: 42
+  
+  # Output directory for all training artifacts
+  output_dir: "./outputs"
+  
+  # Logging frequency (steps)
+  logging_steps: 10
+  
+  # Evaluation frequency (steps)
+  eval_steps: 100
+  
+  # Save checkpoint frequency (steps)
+  save_steps: 500
+  
+  # Maximum number of checkpoints to keep
+  save_total_limit: 3
+  
+  # Resume from checkpoint if available
+  resume_from_checkpoint: true
+  
+  # Enable Weights & Biases logging
+  use_wandb: true
+  wandb_project: "slm-rl-agent"
+  wandb_entity: null  # Your W&B username/team
+  
+  # Enable TensorBoard logging
+  use_tensorboard: true
+  
+  # Mixed precision training: "no", "fp16", "bf16"
+  mixed_precision: "bf16"
+  
+  # Gradient clipping max norm
+  max_grad_norm: 1.0
+  
+  # Dataloader settings
+  dataloader_num_workers: 4
+  dataloader_pin_memory: true
+
+# ============================================
+# Stage 1: Supervised Fine-Tuning (SFT)
+# ============================================
+# SFT trains the model to follow instructions using demonstration data
+# Reference: Ouyang et al. (2022) "Training language models to follow instructions"
+
+sft:
+  # Learning rate (2e-5 is standard for SFT)
+  learning_rate: 2.0e-5
+  
+  # Learning rate scheduler: "linear", "cosine", "constant", "constant_with_warmup"
+  lr_scheduler_type: "cosine"
+  
+  # Warmup ratio (fraction of total steps)
+  warmup_ratio: 0.1
+  
+  # Batch size per device
+  per_device_batch_size: 8
+  
+  # Gradient accumulation steps (effective batch = batch_size * grad_accum * num_gpus)
+  gradient_accumulation_steps: 4
+  
+  # Number of training epochs
+  num_epochs: 3
+  
+  # Maximum sequence length for training
+  max_seq_length: 1024
+  
+  # Maximum number of training steps (overrides num_epochs if set)
+  max_steps: -1  # -1 means use num_epochs
+  
+  # Weight decay for AdamW optimizer
+  weight_decay: 0.01
+  
+  # Adam beta parameters
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  adam_epsilon: 1.0e-8
+  
+  # Use packing to combine multiple short sequences
+  # Significantly improves training efficiency
+  packing: true
+  
+  # NEFTune noise alpha (adds noise to embeddings for regularization)
+  # Set to 0 to disable, 5-15 is typical range
+  neftune_noise_alpha: 5
+  
+  # Dataset settings
+  dataset:
+    # HuggingFace dataset name or local path
+    train_path: "HuggingFaceH4/ultrachat_200k"
+    eval_path: null  # Use split from train if null
+    
+    # Train/eval split ratio if eval_path is null
+    eval_split: 0.05
+    
+    # Maximum samples (for debugging or quick experiments)
+    max_train_samples: null
+    max_eval_samples: 1000
+    
+    # Text column names in dataset
+    prompt_column: "prompt"
+    response_column: "response"
+    
+    # Chat template (if using conversation format)
+    # Options: "chatml", "llama2", "zephyr", "alpaca", null (auto-detect)
+    chat_template: null
+
+# ============================================
+# Stage 2: Reward Model Training
+# ============================================
+# Trains a model to predict human preferences between response pairs
+# Reference: Christiano et al. (2017) "Deep reinforcement learning from human preferences"
+
+reward:
+  # Learning rate (typically lower than SFT)
+  learning_rate: 1.0e-5
+  
+  # Learning rate scheduler
+  lr_scheduler_type: "cosine"
+  
+  # Warmup ratio
+  warmup_ratio: 0.1
+  
+  # Batch size per device
+  per_device_batch_size: 4
+  
+  # Gradient accumulation steps
+  gradient_accumulation_steps: 4
+  
+  # Number of training epochs (1 epoch is often sufficient)
+  num_epochs: 1
+  
+  # Maximum sequence length
+  max_seq_length: 512
+  
+  # Weight decay
+  weight_decay: 0.01
+  
+  # Center rewards around 0 (recommended for stability)
+  center_rewards_coefficient: 0.01
+  
+  # Loss function: "bradley_terry" or "margin"
+  loss_type: "bradley_terry"
+  
+  # Margin for margin loss (if using margin loss)
+  margin: 0.0
+  
+  # Dataset settings
+  dataset:
+    # HuggingFace dataset name or local path
+    train_path: "HuggingFaceH4/ultrafeedback_binarized"
+    eval_path: null
+    
+    # Split configuration
+    eval_split: 0.1
+    
+    # Maximum samples
+    max_train_samples: null
+    max_eval_samples: 500
+    
+    # Column names for preference data
+    prompt_column: "prompt"
+    chosen_column: "chosen"
+    rejected_column: "rejected"
+
+# ============================================
+# Stage 3A: PPO Training
+# ============================================
+# Proximal Policy Optimization for aligning the model with rewards
+# Reference: Schulman et al. (2017) "Proximal Policy Optimization Algorithms"
+
+ppo:
+  # Learning rate for policy (actor)
+  learning_rate: 1.0e-5
+  
+  # Learning rate for value function (critic)
+  # If null, uses same as policy
+  vf_learning_rate: null
+  
+  # Batch size for collecting rollouts
+  batch_size: 64
+  
+  # Mini-batch size for PPO updates
+  mini_batch_size: 8
+  
+  # Number of PPO epochs per batch
+  ppo_epochs: 4
+  
+  # Total number of PPO steps
+  num_ppo_steps: 1000
+  
+  # Maximum sequence length for generation
+  max_new_tokens: 256
+  
+  # KL penalty configuration
+  # Initial KL coefficient
+  init_kl_coef: 0.1
+  
+  # Target KL divergence
+  target_kl: 0.1
+  
+  # Adaptive KL control (adjusts kl_coef during training)
+  adap_kl_ctrl: true
+  
+  # KL penalty type: "kl", "abs", "mse", "full"
+  kl_penalty: "kl"
+  
+  # PPO clipping range
+  cliprange: 0.2
+  
+  # Value function clipping range
+  cliprange_value: 0.2
+  
+  # GAE parameters
+  gamma: 0.99  # Discount factor
+  gae_lambda: 0.95  # GAE lambda
+  
+  # Value function coefficient in loss
+  vf_coef: 0.5
+  
+  # Entropy coefficient (usually 0 for language models)
+  entropy_coef: 0.0
+  
+  # Normalize advantages
+  normalize_advantage: true
+  
+  # Whiten rewards (normalize to mean 0, std 1)
+  whiten_rewards: false
+  
+  # Gradient accumulation
+  gradient_accumulation_steps: 1
+  
+  # Reward clipping
+  clip_reward: 10.0
+  
+  # Generation settings
+  generation:
+    temperature: 1.0
+    top_k: 50
+    top_p: 0.95
+    do_sample: true
+    
+  # Early stopping
+  early_stopping: true
+  target_reward: null  # Stop if reward reaches this value
+
+# ============================================
+# Stage 3B: DPO Training (Alternative to PPO)
+# ============================================
+# Direct Preference Optimization - simpler alternative to PPO
+# Reference: Rafailov et al. (2023) "Direct Preference Optimization"
+
+dpo:
+  # Learning rate (typically very low for DPO)
+  learning_rate: 5.0e-7
+  
+  # Learning rate scheduler
+  lr_scheduler_type: "cosine"
+  
+  # Warmup ratio
+  warmup_ratio: 0.1
+  
+  # Batch size per device
+  per_device_batch_size: 4
+  
+  # Gradient accumulation steps
+  gradient_accumulation_steps: 4
+  
+  # Number of training epochs
+  num_epochs: 1
+  
+  # Maximum steps
+  max_steps: -1
+  
+  # Maximum sequence length
+  max_seq_length: 1024
+  
+  # Maximum prompt length
+  max_prompt_length: 512
+  
+  # DPO beta parameter (KL penalty strength)
+  # Higher = more conservative updates
+  # Typical range: 0.05 - 0.5
+  beta: 0.1
+  
+  # Loss type: "sigmoid" (standard DPO), "hinge", "ipo", "kto_pair"
+  loss_type: "sigmoid"
+  
+  # Label smoothing
+  label_smoothing: 0.0
+  
+  # Reference model settings
+  # If true, use a separate reference model
+  # If false, use the initial model weights (more memory efficient)
+  use_ref_model: true
+  
+  # Precompute reference model log probabilities (saves memory)
+  precompute_ref_log_probs: false
+  
+  # RPO (Relative Policy Optimization) alpha
+  # Set > 0 to use RPO variant
+  rpo_alpha: null
+  
+  # Dataset settings
+  dataset:
+    train_path: "HuggingFaceH4/ultrafeedback_binarized"
+    eval_path: null
+    eval_split: 0.1
+    max_train_samples: null
+    max_eval_samples: 500
+    prompt_column: "prompt"
+    chosen_column: "chosen"
+    rejected_column: "rejected"
+
+# ============================================
+# Stage 3C: GRPO Training (Advanced)
+# ============================================
+# Group Relative Policy Optimization - used in DeepSeek R1
+# Eliminates need for value network by using group statistics
+
+grpo:
+  # Learning rate
+  learning_rate: 1.0e-6
+  
+  # Batch size
+  batch_size: 16
+  
+  # Number of responses per prompt (group size)
+  num_generations: 4
+  
+  # Number of training steps
+  num_steps: 500
+  
+  # Maximum new tokens
+  max_new_tokens: 512
+  
+  # Temperature for generation
+  temperature: 0.7
+  
+  # KL coefficient
+  kl_coef: 0.1
+  
+  # Reward function type: "model" or "rule"
+  # "rule" uses verifiable rewards (math, code)
+  reward_type: "model"
+  
+  # Gradient accumulation
+  gradient_accumulation_steps: 4
+  
+  # Clip advantages
+  clip_advantage: true
+  advantage_clip: 0.2
+
+# ============================================
+# Stage 3D: ORPO Training (Single-Stage)
+# ============================================
+# Odds Ratio Preference Optimization - combines SFT and alignment
+# Reference: Hong et al. (2024) "ORPO: Monolithic Preference Optimization"
+
+orpo:
+  # Learning rate
+  learning_rate: 8.0e-6
+  
+  # Batch size
+  per_device_batch_size: 4
+  
+  # Gradient accumulation
+  gradient_accumulation_steps: 4
+  
+  # Number of epochs
+  num_epochs: 1
+  
+  # Maximum sequence length
+  max_seq_length: 1024
+  
+  # ORPO beta (odds ratio weight)
+  beta: 0.1
+  
+  # Dataset settings (same format as DPO)
+  dataset:
+    train_path: "HuggingFaceH4/ultrafeedback_binarized"
+    eval_path: null

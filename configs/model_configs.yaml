@@ -1,0 +1,198 @@
+# Model Configurations for SLM-RL-Agent
+# This file defines all model-related settings including architecture, LoRA, and quantization
+
+# ============================================
+# Available Base Models
+# ============================================
+# Choose from the following pre-trained models:
+# - EleutherAI/pythia-70m-deduped      (70M params)
+# - EleutherAI/pythia-160m-deduped     (160M params)  
+# - EleutherAI/pythia-410m-deduped     (410M params)
+# - HuggingFaceTB/SmolLM2-135M         (135M params)
+# - HuggingFaceTB/SmolLM2-360M         (360M params)
+# - HuggingFaceTB/SmolLM2-1.7B         (1.7B params)
+# - distilbert/distilgpt2              (82M params)
+
+# ============================================
+# Default Model Configuration
+# ============================================
+model:
+  # Base model to use (HuggingFace model ID or local path)
+  name: "EleutherAI/pythia-160m-deduped"
+  
+  # Model type: "causal_lm" for decoder-only, "seq2seq" for encoder-decoder
+  model_type: "causal_lm"
+  
+  # Whether to use Flash Attention 2 for faster training
+  # Requires: pip install flash-attn --no-build-isolation
+  use_flash_attention: true
+  
+  # Enable gradient checkpointing to reduce memory at cost of speed
+  # Recommended for models > 100M parameters
+  gradient_checkpointing: true
+  
+  # Data type for model weights
+  # Options: "float32", "float16", "bfloat16", "auto"
+  torch_dtype: "bfloat16"
+  
+  # Device mapping strategy
+  # Options: "auto", "cuda:0", "cpu", or custom device map dict
+  device_map: "auto"
+  
+  # Trust remote code (required for some models like Phi)
+  trust_remote_code: false
+  
+  # Attention implementation
+  # Options: "eager", "sdpa", "flash_attention_2"
+  attn_implementation: "sdpa"
+
+# ============================================
+# LoRA Configuration (Parameter-Efficient Fine-Tuning)
+# ============================================
+# LoRA reduces trainable parameters by 99%+ while maintaining quality
+# Reference: Hu et al. (2021) "LoRA: Low-Rank Adaptation of Large Language Models"
+
+lora:
+  # Enable LoRA for training
+  enabled: true
+  
+  # LoRA rank - lower values = fewer parameters, higher values = more capacity
+  # Recommended: 8-32 for SLMs, 16-64 for larger models
+  r: 16
+  
+  # LoRA alpha - scaling factor, typically set to r or 2*r
+  # Effective learning rate scaling: alpha/r
+  alpha: 32
+  
+  # Dropout probability for LoRA layers
+  dropout: 0.05
+  
+  # Target modules to apply LoRA
+  # Options: "all-linear", or list like ["q_proj", "v_proj", "k_proj", "o_proj"]
+  target_modules: "all-linear"
+  
+  # Bias handling: "none", "all", or "lora_only"
+  bias: "none"
+  
+  # Task type for PEFT
+  task_type: "CAUSAL_LM"
+  
+  # Modules to save (in addition to LoRA weights)
+  modules_to_save: null
+  
+  # Use RSLoRA scaling (recommended for better stability)
+  use_rslora: false
+
+# ============================================
+# Quantization Configuration (QLoRA)
+# ============================================
+# QLoRA enables training with 4-bit quantized weights
+# Reference: Dettmers et al. (2023) "QLoRA: Efficient Finetuning of Quantized LLMs"
+
+quantization:
+  # Enable 4-bit quantization
+  enabled: true
+  
+  # Number of bits: 4 or 8
+  bits: 4
+  
+  # Quantization type: "nf4" (recommended) or "fp4"
+  # NF4 is optimized for normally distributed weights
+  quant_type: "nf4"
+  
+  # Compute dtype for quantized weights
+  compute_dtype: "bfloat16"
+  
+  # Double quantization for additional memory savings
+  # Compresses quantization constants from FP32 to FP8
+  double_quant: true
+  
+  # Use nested quantization (experimental)
+  use_nested_quant: false
+
+# ============================================
+# Reward Model Configuration
+# ============================================
+reward_model:
+  # Initialize from SFT model or base model
+  init_from_sft: true
+  
+  # Number of reward head layers
+  # 1 = simple linear projection, 2+ = MLP
+  num_head_layers: 1
+  
+  # Hidden size for MLP head (if num_head_layers > 1)
+  head_hidden_size: 256
+  
+  # Dropout for reward head
+  head_dropout: 0.1
+  
+  # Whether to normalize rewards
+  normalize_rewards: true
+  
+  # Reward scaling factor
+  reward_scale: 1.0
+
+# ============================================
+# Value Head Configuration (for PPO)
+# ============================================
+value_head:
+  # Number of layers in value head
+  num_layers: 2
+  
+  # Hidden size for value head
+  hidden_size: 256
+  
+  # Dropout for value head
+  dropout: 0.1
+  
+  # Initialize value head to output near-zero values
+  zero_init: true
+
+# ============================================
+# Model-Specific Configurations
+# ============================================
+# Override settings for specific models
+
+model_overrides:
+  # Pythia models
+  "EleutherAI/pythia-70m-deduped":
+    lora:
+      r: 8
+      alpha: 16
+    quantization:
+      enabled: false  # Small enough to train in full precision
+  
+  "EleutherAI/pythia-160m-deduped":
+    lora:
+      r: 16
+      alpha: 32
+  
+  "EleutherAI/pythia-410m-deduped":
+    lora:
+      r: 32
+      alpha: 64
+  
+  # SmolLM2 models
+  "HuggingFaceTB/SmolLM2-135M":
+    model:
+      use_flash_attention: true
+    lora:
+      r: 16
+      alpha: 32
+  
+  "HuggingFaceTB/SmolLM2-360M":
+    model:
+      use_flash_attention: true
+    lora:
+      r: 32
+      alpha: 64
+  
+  "HuggingFaceTB/SmolLM2-1.7B":
+    model:
+      gradient_checkpointing: true
+    lora:
+      r: 64
+      alpha: 128
+    quantization:
+      enabled: true

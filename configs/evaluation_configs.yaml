@@ -1,0 +1,335 @@
+# Evaluation Configurations for SLM-RL-Agent
+# This file defines settings for comprehensive model evaluation
+
+# ============================================
+# General Evaluation Settings
+# ============================================
+general:
+  # Output directory for evaluation results
+  output_dir: "./outputs/evaluation"
+  
+  # Random seed for reproducibility
+  seed: 42
+  
+  # Batch size for evaluation
+  batch_size: 16
+  
+  # Number of samples for each evaluation
+  num_samples: 1000
+  
+  # Save individual predictions
+  save_predictions: true
+  
+  # Generate visualizations
+  generate_plots: true
+  
+  # Device for evaluation
+  device: "cuda"
+
+# ============================================
+# Language Modeling Metrics
+# ============================================
+# Measures how well the model predicts text
+
+language_modeling:
+  # Calculate perplexity
+  perplexity:
+    enabled: true
+    # Stride for sliding window (for long sequences)
+    stride: 512
+    # Maximum sequence length
+    max_length: 1024
+  
+  # Cross-entropy loss on validation set
+  cross_entropy:
+    enabled: true
+
+# ============================================
+# Generation Quality Metrics
+# ============================================
+# Measures quality of generated text compared to references
+
+generation_quality:
+  # BLEU score (n-gram precision)
+  # Reference: Papineni et al. (2002) "BLEU: a Method for Automatic Evaluation"
+  bleu:
+    enabled: true
+    max_n: 4  # Calculate BLEU-1 through BLEU-4
+    smooth: true  # Use smoothing for short sequences
+  
+  # ROUGE score (n-gram recall)
+  # Reference: Lin (2004) "ROUGE: A Package for Automatic Evaluation of Summaries"
+  rouge:
+    enabled: true
+    types: ["rouge1", "rouge2", "rougeL", "rougeLsum"]
+  
+  # BERTScore (semantic similarity using BERT embeddings)
+  # Reference: Zhang et al. (2020) "BERTScore: Evaluating Text Generation with BERT"
+  bertscore:
+    enabled: true
+    model: "microsoft/deberta-xlarge-mnli"
+    lang: "en"
+    rescale_with_baseline: true
+  
+  # METEOR score (alignment-based metric)
+  meteor:
+    enabled: true
+  
+  # SacreBLEU (standardized BLEU implementation)
+  sacrebleu:
+    enabled: true
+
+# ============================================
+# RLHF-Specific Metrics
+# ============================================
+# Metrics specific to reinforcement learning from human feedback
+
+rlhf:
+  # Average reward score from reward model
+  reward_score:
+    enabled: true
+    # Path to reward model (if not using same as training)
+    reward_model_path: null
+  
+  # Reward model accuracy on preference data
+  reward_accuracy:
+    enabled: true
+    # Number of preference pairs to evaluate
+    num_pairs: 1000
+  
+  # KL divergence from reference model
+  # Measures how far the policy has drifted
+  kl_divergence:
+    enabled: true
+    # Path to reference model (SFT model)
+    reference_model_path: null
+    # Number of samples for estimation
+    num_samples: 500
+  
+  # Win rate against baseline
+  # Simulates human preference comparison
+  win_rate:
+    enabled: true
+    # Baseline model for comparison
+    baseline_model_path: null
+    # Number of comparisons
+    num_comparisons: 200
+    # Use reward model as judge
+    use_reward_model: true
+
+# ============================================
+# Diversity Metrics
+# ============================================
+# Measures diversity and variety in generated outputs
+
+diversity:
+  # Distinct-n: ratio of unique n-grams
+  distinct:
+    enabled: true
+    n_values: [1, 2, 3]  # Calculate Distinct-1, 2, 3
+  
+  # Self-BLEU: similarity between different outputs
+  # Lower is more diverse
+  self_bleu:
+    enabled: true
+    # Number of samples for pairwise comparison
+    num_samples: 100
+  
+  # Vocabulary coverage
+  vocab_coverage:
+    enabled: true
+  
+  # Entropy of output distribution
+  entropy:
+    enabled: true
+
+# ============================================
+# Coherence Metrics
+# ============================================
+# Measures text coherence and fluency
+
+coherence:
+  # Repetition analysis
+  repetition:
+    enabled: true
+    # N-gram sizes to check for repetition
+    n_values: [3, 4, 5]
+  
+  # Length statistics
+  length_analysis:
+    enabled: true
+    # Expected length range
+    min_length: 10
+    max_length: 500
+
+# ============================================
+# Agent-Specific Metrics
+# ============================================
+# Metrics for evaluating agent capabilities
+
+agent:
+  # Task completion rate
+  task_completion:
+    enabled: true
+    # Task evaluation dataset
+    task_dataset: null
+  
+  # Tool/function calling accuracy
+  tool_calling:
+    enabled: true
+    # Tool definitions for evaluation
+    tool_definitions_path: null
+    # Metrics to calculate
+    metrics: ["selection_accuracy", "parameter_accuracy", "format_accuracy"]
+  
+  # Multi-turn conversation coherence
+  conversation:
+    enabled: true
+    # Maximum turns to evaluate
+    max_turns: 5
+
+# ============================================
+# Human Evaluation Settings
+# ============================================
+# Configuration for human evaluation interface
+
+human_eval:
+  # Enable human evaluation interface
+  enabled: false
+  
+  # Number of samples for human evaluation
+  num_samples: 100
+  
+  # Evaluation criteria
+  criteria:
+    - name: "helpfulness"
+      description: "How helpful is the response?"
+      scale: [1, 5]
+    
+    - name: "coherence"
+      description: "How coherent and well-structured is the response?"
+      scale: [1, 5]
+    
+    - name: "accuracy"
+      description: "How factually accurate is the response?"
+      scale: [1, 5]
+    
+    - name: "safety"
+      description: "Is the response safe and appropriate?"
+      scale: [1, 5]
+  
+  # Comparison mode (A/B testing)
+  comparison_mode: true
+  comparison_models: []  # Paths to models for comparison
+
+# ============================================
+# LLM-as-Judge Evaluation
+# ============================================
+# Using a large language model to evaluate outputs
+# Reference: Zheng et al. (2023) "Judging LLM-as-a-Judge"
+
+llm_judge:
+  # Enable LLM-as-judge evaluation
+  enabled: true
+  
+  # Judge model (API-based or local)
+  judge_model: "gpt-4"  # or local model path
+  
+  # API configuration (if using API)
+  api_key_env: "OPENAI_API_KEY"
+  
+  # Evaluation prompt template
+  prompt_template: |
+    Please evaluate the following response on a scale of 1-10.
+    
+    Question: {question}
+    Response: {response}
+    
+    Evaluate based on:
+    1. Helpfulness (1-10)
+    2. Accuracy (1-10)
+    3. Coherence (1-10)
+    
+    Provide your scores in JSON format.
+  
+  # Number of samples
+  num_samples: 100
+  
+  # Temperature for judge model
+  temperature: 0.0
+
+# ============================================
+# Benchmark Evaluations
+# ============================================
+# Standard benchmark evaluations
+
+benchmarks:
+  # HellaSwag (commonsense reasoning)
+  hellaswag:
+    enabled: true
+    num_samples: 1000
+  
+  # ARC (science reasoning)
+  arc:
+    enabled: true
+    subset: "easy"  # "easy" or "challenge"
+    num_samples: 1000
+  
+  # MMLU (multi-task language understanding)
+  mmlu:
+    enabled: false  # Computationally expensive
+    subjects: "all"  # or list of specific subjects
+  
+  # TruthfulQA (truthfulness)
+  truthfulqa:
+    enabled: true
+    num_samples: 500
+  
+  # Custom benchmark
+  custom:
+    enabled: false
+    path: null
+    format: "json"  # "json", "csv", "jsonl"
+
+# ============================================
+# Comparison Settings
+# ============================================
+# Compare multiple models
+
+comparison:
+  # Enable multi-model comparison
+  enabled: true
+  
+  # Models to compare
+  models:
+    - name: "SFT Baseline"
+      path: "./outputs/sft/final"
+    
+    - name: "PPO (β=0.1)"
+      path: "./outputs/ppo/final"
+    
+    - name: "DPO (β=0.1)"
+      path: "./outputs/dpo/final"
+  
+  # Metrics for comparison
+  metrics: ["perplexity", "reward_score", "win_rate", "distinct_2"]
+  
+  # Generate comparison plots
+  generate_comparison_plots: true
+
+# ============================================
+# Output Settings
+# ============================================
+output:
+  # Output formats
+  formats: ["json", "csv", "markdown"]
+  
+  # Generate LaTeX tables
+  latex_tables: true
+  
+  # Significant digits for metrics
+  precision: 4
+  
+  # Include confidence intervals
+  confidence_intervals: true
+  confidence_level: 0.95
