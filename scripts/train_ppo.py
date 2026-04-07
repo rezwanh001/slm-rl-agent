@@ -84,15 +84,30 @@ def load_prompts(dataset_path: str, max_samples: int = None) -> list:
 def create_reward_fn(reward_model_path: str, tokenizer):
     """Create a reward function using the trained reward model."""
     from transformers import AutoModelForSequenceClassification
-    
+
     logger.info(f"Loading reward model from {reward_model_path}")
-    
-    reward_model = AutoModelForSequenceClassification.from_pretrained(
-        reward_model_path,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-        trust_remote_code=True,
-    )
+
+    # Check if this is a PEFT adapter (has adapter_config.json)
+    adapter_config_path = os.path.join(reward_model_path, "adapter_config.json")
+    if os.path.exists(adapter_config_path):
+        from peft import PeftConfig, PeftModel
+        peft_config = PeftConfig.from_pretrained(reward_model_path)
+        base_model = AutoModelForSequenceClassification.from_pretrained(
+            peft_config.base_model_name_or_path,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True,
+            num_labels=1,
+        )
+        reward_model = PeftModel.from_pretrained(base_model, reward_model_path)
+        reward_model = reward_model.merge_and_unload()
+    else:
+        reward_model = AutoModelForSequenceClassification.from_pretrained(
+            reward_model_path,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
     reward_model.eval()
     
     def compute_rewards(prompts, responses):
@@ -202,30 +217,70 @@ def main():
             bnb_4bit_compute_dtype=torch.bfloat16,
         )
     
-    # Load model with value head for PPO
-    model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        args.policy_model,
-        **model_kwargs,
-    )
-    
-    # Apply LoRA if enabled
-    if args.use_lora:
-        logger.info(f"Applying LoRA with r={args.lora_r}")
-        lora_config = LoraConfig(
+    # Check if SFT model is a PEFT adapter
+    adapter_config_path = os.path.join(args.policy_model, "adapter_config.json")
+    is_peft = os.path.exists(adapter_config_path)
+
+    if is_peft:
+        logger.info("Detected PEFT adapter — merging into base model for stable PPO...")
+        from peft import PeftConfig, PeftModel as PeftModelLoader
+        peft_cfg = PeftConfig.from_pretrained(args.policy_model)
+
+        # Merge PEFT adapter into base to get a full model
+        base_model = AutoModelForCausalLM.from_pretrained(
+            peft_cfg.base_model_name_or_path,
+            trust_remote_code=True,
+            torch_dtype=torch.float32,  # float32 for PPO stability
+        )
+        peft_model = PeftModelLoader.from_pretrained(base_model, args.policy_model)
+        merged_model = peft_model.merge_and_unload()
+
+        merged_dir = os.path.join(args.output_dir, "_merged_sft")
+        os.makedirs(merged_dir, exist_ok=True)
+        merged_model.save_pretrained(merged_dir)
+        tokenizer.save_pretrained(merged_dir)
+        del merged_model, peft_model, base_model
+        torch.cuda.empty_cache()
+
+        # Load merged model with fresh LoRA (small alpha for stability)
+        logger.info("Loading merged model with fresh LoRA for PPO...")
+        ppo_lora_config = LoraConfig(
             r=args.lora_r,
-            lora_alpha=args.lora_r * 2,
-            lora_dropout=0.05,
-            target_modules="all-linear",
+            lora_alpha=args.lora_r,  # alpha=r (not 2r) for smaller initial updates
+            lora_dropout=0.0,
+            target_modules=["query_key_value", "dense"],  # fewer targets for stability
             task_type="CAUSAL_LM",
         )
-        model.pretrained_model = get_peft_model(model.pretrained_model, lora_config)
-    
-    # Load reference model (frozen SFT model)
-    logger.info("Loading reference model...")
-    ref_model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        args.policy_model,
-        **model_kwargs,
-    )
+        merged_kwargs = {"trust_remote_code": True, "torch_dtype": torch.float32}
+        model = AutoModelForCausalLMWithValueHead.from_pretrained(
+            merged_dir, peft_config=ppo_lora_config, **merged_kwargs,
+        )
+
+        logger.info("Loading reference model (frozen merged SFT)...")
+        ref_model = AutoModelForCausalLMWithValueHead.from_pretrained(
+            merged_dir, **merged_kwargs,
+        )
+    else:
+        # Load model with value head for PPO
+        model = AutoModelForCausalLMWithValueHead.from_pretrained(
+            args.policy_model, **model_kwargs,
+        )
+        # Apply LoRA if enabled
+        if args.use_lora:
+            logger.info(f"Applying LoRA with r={args.lora_r}")
+            lora_config = LoraConfig(
+                r=args.lora_r,
+                lora_alpha=args.lora_r * 2,
+                lora_dropout=0.05,
+                target_modules="all-linear",
+                task_type="CAUSAL_LM",
+            )
+            model.pretrained_model = get_peft_model(model.pretrained_model, lora_config)
+        # Load reference model (frozen SFT model)
+        logger.info("Loading reference model...")
+        ref_model = AutoModelForCausalLMWithValueHead.from_pretrained(
+            args.policy_model, **model_kwargs,
+        )
     
     # Create reward function
     reward_fn = create_reward_fn(args.reward_model, tokenizer)
@@ -248,6 +303,8 @@ def main():
         log_with="tensorboard",
         project_kwargs={"logging_dir": os.path.join(args.output_dir, "logs")},
         seed=args.seed,
+        max_grad_norm=0.5,  # Aggressive gradient clipping for stability
+        ratio_threshold=10.0,
     )
     
     # Create PPO trainer

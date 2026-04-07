@@ -2,6 +2,15 @@
 # SLM-RL-Agent .gitignore
 # =============================================================================
 
+# Paper build artifacts only
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.synctex.gz
+paper/*.pdf
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

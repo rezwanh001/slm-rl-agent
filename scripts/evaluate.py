@@ -79,8 +79,12 @@ def compute_perplexity(model, tokenizer, texts: List[str], batch_size: int = 8) 
         inputs = {k: v.to(device) for k, v in inputs.items()}
         
         with torch.no_grad():
-            outputs = model(**inputs, labels=inputs["input_ids"])
-            
+            # Mask padding tokens in labels (-100 is ignored by CrossEntropyLoss)
+            labels = inputs["input_ids"].clone()
+            labels[inputs["attention_mask"] == 0] = -100
+
+            outputs = model(**inputs, labels=labels)
+
             # Count actual tokens (non-padding)
             mask = inputs["attention_mask"]
             num_tokens = mask.sum().item()
@@ -195,13 +199,26 @@ def compute_reward_scores(
     """Compute reward scores using a trained reward model."""
     try:
         from transformers import AutoModelForSequenceClassification
-        
+
         logger.info(f"Loading reward model from {reward_model_path}")
-        reward_model = AutoModelForSequenceClassification.from_pretrained(
-            reward_model_path,
-            torch_dtype=torch.bfloat16,
-            device_map="auto",
-        )
+        adapter_config_path = os.path.join(reward_model_path, "adapter_config.json")
+        if os.path.exists(adapter_config_path):
+            from peft import PeftConfig, PeftModel
+            peft_config = PeftConfig.from_pretrained(reward_model_path)
+            base_model = AutoModelForSequenceClassification.from_pretrained(
+                peft_config.base_model_name_or_path,
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
+                num_labels=1,
+            )
+            reward_model = PeftModel.from_pretrained(base_model, reward_model_path)
+            reward_model = reward_model.merge_and_unload()
+        else:
+            reward_model = AutoModelForSequenceClassification.from_pretrained(
+                reward_model_path,
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
+            )
         reward_model.eval()
         
         rewards = []
@@ -260,13 +277,28 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_path,
-        torch_dtype=torch.bfloat16,
-        device_map="auto",
-        trust_remote_code=True,
-    )
+    tokenizer.padding_side = "left"  # Required for decoder-only generation
+
+    # Check if model is a PEFT adapter
+    adapter_config_path = os.path.join(args.model_path, "adapter_config.json")
+    if os.path.exists(adapter_config_path):
+        from peft import PeftConfig, PeftModel
+        peft_config = PeftConfig.from_pretrained(args.model_path)
+        base_model = AutoModelForCausalLM.from_pretrained(
+            peft_config.base_model_name_or_path,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+        model = PeftModel.from_pretrained(base_model, args.model_path)
+        model = model.merge_and_unload()
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_path,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
     
     # Load evaluation data
     dataset = load_eval_data(args.eval_dataset, args.max_samples)
