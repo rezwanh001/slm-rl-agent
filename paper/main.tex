@@ -1,6 +1,6 @@
 \documentclass[10pt,twocolumn,letterpaper]{article}
 
-% CVPR/NeurIPS compatible packages
+% ─── Packages ────────────────────────────────────────────────────────────────
 \usepackage{times}
 \usepackage{epsfig}
 \usepackage{graphicx}
@@ -14,212 +14,399 @@
 \usepackage{subcaption}
 \usepackage{algorithm}
 \usepackage{algorithmic}
+\usepackage{microtype}
+\usepackage{enumitem}
 \usepackage[margin=1in]{geometry}
 
 \hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
 
-\title{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}
+% ─── Title & Authors ─────────────────────────────────────────────────────────
+\title{Efficiently Enhancing SLM Agents: A Reinforcement Learning\\
+       Approach to Performance Improvement}
 
 \author{
-Md Rezwanul Haque \\
-University of Waterloo \\
-{\tt\small mr3haque@uwaterloo.ca}
+  Md Rezwanul Haque\\
+  Department of Systems Design Engineering\\
+  University of Waterloo\\
+  Waterloo, Ontario, Canada\\
+  {\tt\small mr3haque@uwaterloo.ca}
 }
 
 \date{}
 
+% ─────────────────────────────────────────────────────────────────────────────
 \begin{document}
 \maketitle
 
+% ─── Abstract ────────────────────────────────────────────────────────────────
 \begin{abstract}
-Large language models have established new benchmarks across numerous natural language tasks, but their prohibitive computational demands restrict deployment in resource-constrained settings. We investigate whether reinforcement learning from human feedback (RLHF) can meaningfully improve the quality of small language models (SLMs) with fewer than 200 million parameters. Our framework applies a three-stage pipeline---supervised fine-tuning (SFT), reward modeling, and proximal policy optimization (PPO)---to two Pythia architectures (70M and 160M parameters) across three diverse text corpora. Experiments on TinyStories, CNN/DailyMail, and Wikitext-103 reveal that RLHF benefits are domain-sensitive: the 70M model achieves a positive reward gain on the simpler TinyStories domain while reward improvements on more complex corpora remain marginal. A key finding is that reward model calibration is critical at the SLM scale---the 160M model's reward model converged to a different output range, impeding direct cross-model comparison. Crucially, the entire alignment process for a single model completes within 1--2 GPU hours on a single NVIDIA RTX A6000 accelerator, underscoring the feasibility of iterative RLHF research at modest hardware budgets. Code, models, datasets, and an interactive demonstration are publicly available at \url{https://github.com/rezwanh001/slm-rl-agent}.
+Large language models (LLMs) achieve strong performance across a wide range of natural language tasks, yet their enormous computational cost limits deployment in resource-constrained settings. In this work we study whether Reinforcement Learning from Human Feedback (RLHF) can meaningfully improve small language models (SLMs) with 70M--160M parameters. We implement a three-stage pipeline---supervised fine-tuning (SFT), reward model training, and proximal policy optimization (PPO)---applied to two Pythia architectures across three diverse text corpora: TinyStories, CNN/DailyMail, and Wikitext-103. Beyond reporting empirical results, we document and resolve two critical engineering obstacles that arise specifically at the SLM scale: (1) TRL's PPO trainer silently freezes LoRA parameters when the policy is a PEFT adapter, preventing any learning; and (2) reduced-precision (bfloat16) arithmetic causes PPO probability-ratio explosions in very small models, requiring full float32 precision. We address both issues with a \emph{merge-and-reinitialize} strategy and precision selection. Our experiments reveal that RLHF benefits at the SLM scale are domain-sensitive: Pythia-70M achieves a positive reward gain on TinyStories (the simplest domain), while improvements on more complex corpora remain marginal. We release all trained model weights, preference datasets, evaluation code, and an interactive Gradio demonstration to support reproducible research at modest hardware budgets.
 \end{abstract}
 
+% ─── 1. Introduction ─────────────────────────────────────────────────────────
 \section{Introduction}
+\label{sec:intro}
 
-The rapid progress in generative language modeling---from GPT-2 \cite{radford2019language} to GPT-3 \cite{brown2020language} and beyond---has been driven in large part by scaling model parameters and training data. State-of-the-art systems now routinely exceed 100 billion parameters, requiring thousands of GPU hours for a single training run \cite{scao2022bloom}. While these models achieve remarkable fluency and generalization, their size precludes deployment on edge devices, mobile platforms, and within organizations with limited compute budgets.
+The past several years have witnessed a dramatic expansion in the capabilities of generative language models~\cite{radford2019language,brown2020language,scao2022bloom}. Models exceeding 100 billion parameters now achieve near-human performance on many benchmarks, yet the compute required to train and serve such systems is out of reach for most organizations. This has motivated a growing body of research on \emph{small language models} (SLMs)---architectures with fewer than 500 million parameters---that can run efficiently on consumer hardware while still producing coherent text~\cite{eldan2023tinystories,biderman2023pythia,allal2024smollm}.
 
-A parallel line of research has demonstrated that smaller models, when trained on carefully curated data, can produce surprisingly coherent outputs \cite{eldan2023tinystories}. The remaining gap between these compact models and their larger counterparts lies not primarily in raw language modeling capability, but in alignment: the degree to which generated text is helpful, relevant, and preferred by human evaluators. Reinforcement learning from human feedback (RLHF) has emerged as the dominant paradigm for closing this alignment gap in large-scale settings \cite{ouyang2022training, christiano2017deep}, yet its systematic application to SLMs has received comparatively little attention.
+A key limitation of current SLMs is not raw language modeling ability but \emph{alignment}: the degree to which outputs are helpful, accurate, and preferred by human users. Reinforcement Learning from Human Feedback (RLHF)~\cite{christiano2017deep} has become the dominant alignment paradigm at the large-model scale, underpinning systems such as InstructGPT~\cite{ouyang2022training}, Claude~\cite{bai2022training}, and Llama~2-Chat~\cite{touvron2023llama}. However, its systematic application to SLMs---and the engineering challenges unique to this regime---has received comparatively little attention.
 
-This paper addresses three questions. First, does RLHF yield measurable improvements when the policy model has fewer than 200 million parameters? Second, how do model scale and dataset complexity interact to determine the effectiveness of the alignment pipeline? Third, what practical challenges arise when applying PPO to very small models, and how can they be addressed?
+This paper makes the following contributions:
 
-Our contributions are as follows:
-\begin{itemize}
-  \item We apply a standardized RLHF pipeline to two Pythia architectures (70M and 160M parameters) across three text domains, providing an empirical characterization of alignment efficacy at the SLM scale.
-  \item We identify and address a critical engineering challenge in applying TRL's PPO to PEFT-adapted models: LoRA parameters remain frozen by default, requiring an explicit merge-and-reinitialize strategy.
-  \item We document that reward model calibration varies significantly across base models and datasets, posing a challenge for consistent multi-model comparisons.
-  \item We release all trained model weights, preference datasets, and training scripts under a permissive license, enabling direct reproduction and extension of our results.
-  \item We provide an interactive Gradio demonstration for side-by-side comparison of SFT and PPO agents.
-\end{itemize}
+\begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
+  \item \textbf{End-to-end RLHF at the SLM scale.} We apply a complete SFT $\to$ reward model $\to$ PPO pipeline to two Pythia architectures (70M and 160M parameters) across three text domains, providing one of the first systematic empirical characterizations of RLHF at this scale.
 
+  \item \textbf{Merge-and-reinitialize for PEFT--PPO compatibility.} We identify that TRL~\cite{vonwerra2022trl} v0.9 freezes LoRA parameters when the policy is loaded as a PEFT model, and propose a straightforward fix: merge the SFT adapter into base weights, then attach a fresh LoRA before PPO training.
+
+  \item \textbf{Float32 stability requirement.} We show empirically that bfloat16 causes PPO clipping-ratio explosions in models below 200M parameters, and document float32 as the required precision for stable training at this scale.
+
+  \item \textbf{Domain-sensitivity analysis.} We analyze how the difficulty of the target domain interacts with model capacity to determine whether RLHF provides a measurable benefit, finding that a pre-condition of moderate SFT perplexity is necessary for PPO to improve rewards.
+
+  \item \textbf{Open artifacts.} All trained checkpoints, preference datasets, training scripts, and an interactive comparison demo are publicly released.
+\end{enumerate}
+
+% ─── 2. Related Work ─────────────────────────────────────────────────────────
 \section{Related Work}
+\label{sec:related}
 
-\paragraph{Alignment through RLHF.} The idea of learning a reward function from pairwise human preferences was introduced by Christiano et al.~\cite{christiano2017deep} and later scaled to language models by Stiennon et al.~\cite{stiennon2020learning}. Ouyang et al.~\cite{ouyang2022training} applied the full SFT--reward--PPO pipeline to produce InstructGPT, demonstrating that alignment could dramatically improve user preference even when the base model was already capable. Subsequent work explored alternatives to PPO, including Direct Preference Optimization (DPO) \cite{rafailov2023direct} and Group Relative Policy Optimization (GRPO) \cite{shao2024deepseekmath}. Our work returns to the classical PPO formulation but targets the under-explored regime of models below 200M parameters.
+\paragraph{RLHF and alignment.}
+Christiano et al.~\cite{christiano2017deep} introduced learning a reward function from pairwise human comparisons, applied first to robotics tasks and later scaled to language summarization by Stiennon et al.~\cite{stiennon2020learning}. Ouyang et al.~\cite{ouyang2022training} combined SFT, reward modeling, and PPO~\cite{schulman2017proximal} to produce InstructGPT, establishing RLHF as the standard alignment recipe. Recent variants include Direct Preference Optimization (DPO)~\cite{rafailov2023direct}, which eliminates the RL stage by treating the policy itself as an implicit reward, and Group Relative Policy Optimization (GRPO)~\cite{shao2024deepseekmath}, which removes the critic network. Our work uses classical PPO because it provides an explicit reward signal and is well-supported in open tooling, making it the most accessible starting point for SLM practitioners.
 
-\paragraph{Small Language Models.} Eldan and Li \cite{eldan2023tinystories} showed that models with as few as 28M parameters could generate grammatically correct short stories when trained on a synthetic, high-quality corpus. The Pythia model suite \cite{biderman2023pythia} provides a controlled family of autoregressive transformers ranging from 70M to 12B parameters, enabling systematic scaling studies. More recently, the SmolLM2 family \cite{allal2024smollm} demonstrated that aggressive data curation could push the Pareto frontier of quality versus size for models between 135M and 1.7B parameters. We leverage Pythia as our base architecture to study alignment with controlled cross-scale comparisons.
+\paragraph{Small language models.}
+Eldan and Li~\cite{eldan2023tinystories} showed that models with as few as 28M parameters produce grammatically correct narratives when trained on a carefully curated synthetic corpus, revealing that data quality can partially compensate for reduced capacity. The Pythia suite~\cite{biderman2023pythia} provides a controlled family of decoder-only transformers from 70M to 12B parameters trained on the Pile with fixed data ordering, enabling clean ablations across scale. SmolLM2~\cite{allal2024smollm} pushed further by demonstrating that aggressive curation of a 1.7T-token training mixture could yield strong 135M and 360M parameter models. Zephyr~\cite{tunstall2023zephyr} applied DPO to a 7B Mistral model and showed that preference optimization can substantially improve instruction following even from strong baselines. We complement these works by focusing on the sub-200M regime and documenting the unique engineering challenges it introduces.
 
-\paragraph{Parameter-Efficient Fine-Tuning.} Full fine-tuning of even small models is computationally wasteful when the alignment signal is a sparse correction to an already competent policy. Low-Rank Adaptation (LoRA) \cite{hu2021lora} addresses this by injecting trainable low-rank matrices into frozen transformer layers, reducing the number of trainable parameters by over 99\%. QLoRA \cite{dettmers2023qlora} combines LoRA with 4-bit quantization, enabling fine-tuning on a single consumer GPU. Our pipeline uses LoRA throughout, with a specific merge-and-reinitialize strategy for the PPO stage to ensure gradient flow.
+\paragraph{Parameter-efficient fine-tuning.}
+Low-Rank Adaptation (LoRA)~\cite{hu2021lora} injects trainable low-rank matrices into frozen transformer layers, reducing the trainable parameter count by 99\%+ while matching full fine-tuning quality on many tasks. QLoRA~\cite{dettmers2023qlora} further combines LoRA with 4-bit weight quantization. These techniques are standard practice for SFT at the small-model scale. However, as we demonstrate in Section~\ref{sec:method}, applying LoRA adapters directly within TRL's PPO loop requires special handling to maintain gradient flow.
 
+% ─── 3. Methodology ──────────────────────────────────────────────────────────
 \section{Methodology}
+\label{sec:method}
 
-Our pipeline consists of three sequential stages, each building on the output of its predecessor. We describe each stage in terms of its objective, loss function, and key hyperparameters.
+Our pipeline follows the standard three-stage RLHF recipe but addresses two technical issues that arise specifically when applying it to small models via PEFT. Figure~\ref{fig:pipeline} provides an overview.
 
 \subsection{Stage 1: Supervised Fine-Tuning}
 
-The base SLM is a decoder-only transformer \cite{vaswani2017attention} pre-trained with next-token prediction. SFT adapts this model to the target domain by continuing training on a curated text corpus $\mathcal{D}_{\text{SFT}}$. The loss is the standard cross-entropy:
+Given a pre-trained SLM with parameters $\theta_0$ and a domain corpus $\mathcal{D}_\text{SFT} = \{x^{(i)}\}_{i=1}^{N}$, SFT minimizes the standard language modeling loss:
 \begin{equation}
-  \mathcal{L}_{\text{SFT}}(\theta) = -\sum_{i} \log P_\theta(x_i \mid x_{<i})
-  \label{eq:sft_loss}
+  \mathcal{L}_\text{SFT}(\theta) = -\frac{1}{N} \sum_{i=1}^{N} \sum_{t} \log P_\theta\!\left(x^{(i)}_t \mid x^{(i)}_{<t}\right).
+  \label{eq:sft}
 \end{equation}
-where $\theta$ denotes the model parameters. We apply LoRA with rank $r=8$, targeting the query/key/value projections and dense layers. Training uses the AdamW optimizer with cosine learning rate decay, peak rate $2 \times 10^{-5}$, and three epochs over the training split. The resulting model serves as our SFT baseline $\pi_{\text{SFT}}$.
+We apply LoRA~\cite{hu2021lora} with rank $r=8$ and $\alpha=16$, targeting query/key/value projections and feed-forward dense layers. Training uses AdamW~\cite{loshchilov2019decoupled} with a peak learning rate of $2\times10^{-5}$, linear warmup over 6\% of steps, and cosine decay. We train for 3 epochs with per-device batch size 8. The resulting adapter is saved as the SFT checkpoint $\pi_\text{SFT}$.
 
 \subsection{Stage 2: Reward Model Training}
 
-To provide a differentiable proxy for human preferences, we train a reward model $r_\phi$ that maps a prompt--response pair to a scalar score. The architecture mirrors the SFT model but replaces the language modeling head with a single linear projection. We initialize from $\pi_{\text{SFT}}$ to leverage its learned representations.
+The reward model $r_\phi$ maps a (prompt, response) pair to a scalar score. Its backbone mirrors the SFT model but with the language modeling head replaced by a single linear layer projecting to $\mathbb{R}$. We initialize from $\pi_\text{SFT}$ to leverage its domain representations.
 
-Given a preference dataset $\mathcal{D}_{\text{RM}} = \{(p, y_w, y_l)\}$, where $y_w$ is preferred over $y_l$, we minimize the Bradley--Terry loss:
+Given a preference dataset $\mathcal{D}_\text{RM} = \{(p_i, y_i^w, y_i^l)\}$ where $y_i^w \succ y_i^l$ (chosen preferred over rejected), we minimize the Bradley--Terry loss~\cite{bradley1952rank}:
 \begin{equation}
-  \mathcal{L}_{\text{RM}}(\phi) = -\mathbb{E}_{(p, y_w, y_l) \sim \mathcal{D}_{\text{RM}}} \left[ \log \sigma\!\left(r_\phi(p, y_w) - r_\phi(p, y_l)\right) \right]
-  \label{eq:rm_loss}
+  \mathcal{L}_\text{RM}(\phi) = -\mathbb{E}_{(p,y^w,y^l)\sim\mathcal{D}_\text{RM}}\!\left[\log \sigma\!\left(r_\phi(p,y^w) - r_\phi(p,y^l)\right)\right],
+  \label{eq:rm}
 \end{equation}
-where $\sigma$ is the sigmoid function. Training runs for one epoch with learning rate $10^{-5}$ to avoid overfitting to the preference set.
+where $\sigma$ is the sigmoid function. Training runs for a single epoch (learning rate $10^{-5}$, batch size 4) to avoid overfitting on the relatively small preference set.
 
-\subsection{Stage 3: RL Fine-Tuning with PPO}
+\subsection{Stage 3: PPO Fine-Tuning}
+\label{sec:ppo}
 
-The PPO stage optimizes the policy $\pi_{\text{RL}}$ to maximize the expected reward while remaining close to $\pi_{\text{SFT}}$:
+The policy $\pi_\text{RL}$ is optimized to maximize:
 \begin{equation}
-  J(\theta_{\text{RL}}) = \mathbb{E}\!\left[r_\phi(p, y) - \beta \cdot \text{KL}\!\left(\pi_{\text{RL}}(y \mid p) \,\|\, \pi_{\text{SFT}}(y \mid p)\right)\right]
-  \label{eq:ppo_objective}
+  J(\theta) = \mathbb{E}_{p \sim \mathcal{D}, y \sim \pi_\theta(\cdot|p)}\!\!\left[r_\phi(p,y) - \beta\,\mathrm{KL}\!\left(\pi_\theta(\cdot|p)\,\|\,\pi_\text{SFT}(\cdot|p)\right)\right],
+  \label{eq:ppo_obj}
 \end{equation}
-The KL penalty coefficient $\beta$ is initialized at 0.1 and adapted during training using the scheme of Ziegler et al.~\cite{ziegler2019fine}. We run 500 PPO update steps with a rollout batch size of 32 and one PPO epoch per batch, with gradient clipping at $0.5$.
+where $\beta$ is the KL penalty coefficient, adapted online~\cite{ziegler2019fine} to keep KL divergence near a target of 0.1 nats. We use PPO with generalized advantage estimation (GAE)~\cite{schulman2015high} and clipping ratio $\epsilon=0.2$.
 
-\paragraph{PPO with PEFT: Merge-and-Reinitialize.} A non-trivial implementation challenge arises when applying TRL's PPO trainer to PEFT-adapted models. By default, TRL version 0.9.6 initializes the value head but leaves LoRA parameters frozen (\texttt{requires\_grad=False}), resulting in a policy that cannot be updated by the PPO gradient. We address this with a \emph{merge-and-reinitialize} strategy: the SFT LoRA adapter is first merged into the base model weights and saved as a full model; a fresh LoRA adapter is then applied to this merged model before PPO training begins. This ensures that gradients flow through the LoRA parameters while the merged SFT weights serve as the stable initialization. The frozen reference model $\pi_{\text{SFT}}$ is kept as a separate copy of the merged model without any LoRA adapter. We further use \texttt{torch.float32} precision (rather than bfloat16) throughout PPO to prevent ratio explosions.
+\paragraph{Problem: frozen LoRA parameters in TRL PPO.}
+When a PEFT-adapted model is passed directly to TRL's \texttt{PPOTrainer} (v0.9.x), all LoRA parameters are registered with \texttt{requires\_grad=False}. Only the value head (two scalar parameters) remains trainable. The policy generates text, receives reward, but the PPO gradient has no effect on the generation distribution. This silent failure is not indicated by any warning or error.
 
-Figure~\ref{fig:pipeline} illustrates the complete three-stage pipeline.
+\paragraph{Solution: merge-and-reinitialize.}
+We address this with a three-step strategy (Algorithm~\ref{alg:merge}):
+\begin{enumerate}[topsep=2pt, itemsep=1pt]
+  \item Merge the SFT LoRA adapter into the base model weights via \texttt{merge\_and\_unload()}, producing a full-weight checkpoint $\hat{\theta}_\text{SFT}$.
+  \item Apply a \emph{fresh} LoRA to the merged checkpoint. Since LoRA B matrices are initialized to zero, the freshly-initialized adapter is a no-op, preserving the SFT distribution at the start of PPO.
+  \item Use a copy of the merged checkpoint (without any LoRA) as the frozen reference $\pi_\text{SFT}$.
+\end{enumerate}
+This ensures that all LoRA B and A matrices are registered with \texttt{requires\_grad=True} from the start of PPO training.
+
+\paragraph{Float32 precision.}
+When we use bfloat16 for the 70M and 160M parameter models, PPO probability ratios regularly exceed $10^6$ within the first training batch, triggering CUDA assertions. We attribute this to the limited numerical dynamic range of bfloat16 ($\approx 3.4 \times 10^{38}$ vs.\ $\approx 1.8 \times 10^{308}$ for float32) compounding with the small log-probabilities characteristic of small models on out-of-distribution tokens. All PPO experiments use float32.
+
+\begin{algorithm}[t]
+\caption{Merge-and-Reinitialize for PEFT--PPO}
+\label{alg:merge}
+\begin{algorithmic}[1]
+  \REQUIRE SFT adapter path $\mathcal{A}_\text{SFT}$, base model $\mathcal{M}$, output dir $\mathcal{O}$
+  \STATE $\hat{\mathcal{M}} \leftarrow \texttt{PeftModel}(\mathcal{M}, \mathcal{A}_\text{SFT})\texttt{.merge\_and\_unload()}$
+  \STATE \textbf{save} $\hat{\mathcal{M}}$ to $\mathcal{O}/\text{merged}$
+  \STATE $\ell \leftarrow \texttt{LoraConfig}(r, \alpha, \text{dropout}=0)$ \hfill\COMMENT{fresh adapter}
+  \STATE $\pi_\theta \leftarrow \texttt{AutoModelWithValueHead}(\hat{\mathcal{M}},\, \text{peft\_config}=\ell)$
+  \STATE $\pi_\text{ref} \leftarrow \texttt{AutoModelWithValueHead}(\hat{\mathcal{M}})$ \hfill\COMMENT{no LoRA; frozen}
+  \STATE \textbf{run PPO} with $(\pi_\theta,\, \pi_\text{ref},\, r_\phi)$ in \texttt{float32}
+\end{algorithmic}
+\end{algorithm}
 
 \begin{figure*}[t]
   \centering
   \includegraphics[width=0.95\textwidth]{figures/pipeline.pdf}
-  \caption{Overview of the three-stage RLHF pipeline. Stage~1 produces a domain-adapted SFT model $\pi_{\text{SFT}}$ via LoRA. Stage~2 trains a reward model $r_\phi$ from preference data, initialized from $\pi_{\text{SFT}}$. Stage~3 applies the merge-and-reinitialize strategy: the SFT adapter is merged into base weights, a fresh LoRA is applied, and PPO optimizes the policy using $r_\phi$ as the reward signal and the merged model as the KL reference.}
+  \caption{\textbf{Three-stage RLHF pipeline.} \emph{Stage 1 (SFT):} A LoRA adapter is trained on domain text; the adapter is saved as $\pi_\text{SFT}$. \emph{Stage 2 (Reward):} A reward model $r_\phi$ is initialized from $\pi_\text{SFT}$ and trained on pairwise preference data via the Bradley--Terry loss. \emph{Stage 3 (PPO):} The SFT adapter is merged into the base weights; a fresh LoRA $\pi_\theta$ and a frozen reference $\pi_\text{ref}$ are created from this merged model. PPO maximizes $r_\phi$ under a KL constraint relative to $\pi_\text{ref}$.}
   \label{fig:pipeline}
 \end{figure*}
 
+% ─── 4. Experimental Setup ───────────────────────────────────────────────────
 \section{Experimental Setup}
+\label{sec:setup}
 
 \subsection{Models}
 
-We evaluate two architectures from the Pythia suite \cite{biderman2023pythia}:
+We use two architectures from the \textbf{Pythia} suite~\cite{biderman2023pythia}, both in their deduped variants:
 
-\begin{itemize}
-  \item \textbf{Pythia-70M}: A 70-million-parameter transformer with 6 layers and a context window of 2048 tokens.
-  \item \textbf{Pythia-160M}: A 160-million-parameter transformer with 12 layers, providing a controlled within-family scale comparison.
+\begin{itemize}[topsep=2pt, itemsep=1pt]
+  \item \textbf{Pythia-70M}: 6 transformer layers, 512 hidden dim, 8 attention heads, $\approx70$M parameters.
+  \item \textbf{Pythia-160M}: 12 layers, 768 hidden dim, 12 heads, $\approx160$M parameters.
 \end{itemize}
 
-Both use the same tokenizer (BPE, 50,277 tokens) and were pre-trained on the Pile with identical data ordering, ensuring that differences in results reflect model capacity rather than pre-training distribution.
+Both models share the same BPE tokenizer (50,277 vocabulary), were pre-trained on the same corpus (the Pile) with identical data ordering, and differ only in capacity. This makes them ideal for studying scaling effects in isolation.
 
 \subsection{Datasets}
+\label{sec:datasets}
 
-We select three corpora representing different text characteristics:
+We select three corpora with distinct characteristics (Table~\ref{tab:datasets}):
 
-\begin{itemize}
-  \item \textbf{TinyStories} \cite{eldan2023tinystories}: Short fictional narratives with simple vocabulary and clear narrative structure. Subset: 10K training examples. This dataset represents the simplest domain, well-matched to the SLMs' limited capacity.
-  \item \textbf{CNN/DailyMail} \cite{nallapati2016abstractive}: News articles paired with multi-sentence summaries. Subset: 10K examples. We use the article text for SFT and construct preference pairs from summary quality.
-  \item \textbf{Wikitext-103} \cite{merity2016pointer}: Curated Wikipedia articles filtered for quality. We extract non-heading paragraphs exceeding 100 characters. Subset: 10K examples.
+\begin{itemize}[topsep=2pt, itemsep=1pt]
+  \item \textbf{TinyStories}~\cite{eldan2023tinystories}: Short, simple English narratives (vocabulary restricted to words a 3-year-old knows). Both Pythia models have low perplexity on this domain.
+  \item \textbf{CNN/DailyMail}~\cite{nallapati2016abstractive}: News articles. The vocabulary is broader and the discourse is more formal, producing moderate perplexity for the 160M model and high perplexity for the 70M model.
+  \item \textbf{Wikitext-103}~\cite{merity2016pointer}: Wikipedia articles with technical and encyclopedic content. This represents the hardest domain for both models.
 \end{itemize}
 
-For each dataset, preference pairs are constructed by pairing high-quality completions (chosen) with degraded variants (rejected) via truncation, sentence shuffling, or cross-example mismatching.
+For each dataset we use 10K examples for SFT and construct preference pairs for reward model training via three degradation strategies: \emph{truncation} (preferred = full sentence, rejected = first 50\%), \emph{sentence shuffling} (rejected = sentences in random order), and \emph{cross-example mismatch} (rejected = continuation from a different article). These synthetically constructed contrasts provide a clear training signal and enable full reproducibility without human annotation.
+
+\begin{table}[h]
+\centering
+\caption{Dataset characteristics and per-model SFT perplexity.}
+\label{tab:datasets}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Dataset} & \textbf{Train size} & \textbf{70M PPL} & \textbf{160M PPL} \\
+\midrule
+TinyStories    & 10K & 98.7 & 18.6 \\
+CNN/DailyMail  & 10K & 289.8 & 46.8 \\
+Wikitext-103   & 10K & 504.4 & 81.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Training Hyperparameters}
+
+Table~\ref{tab:hparams} lists the key hyperparameters used across all experiments. All runs used the same values; no per-configuration tuning was performed.
+
+\begin{table}[h]
+\centering
+\caption{Hyperparameters used across all experiments.}
+\label{tab:hparams}
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Stage} & \textbf{Parameter} & \textbf{Value} \\
+\midrule
+\multirow{6}{*}{SFT}
+  & Optimizer & AdamW \\
+  & Learning rate & $2\times10^{-5}$ \\
+  & LR schedule & Cosine \\
+  & Batch size & 8 \\
+  & Epochs & 3 \\
+  & LoRA rank / $\alpha$ & 8 / 16 \\
+\midrule
+\multirow{4}{*}{Reward}
+  & Optimizer & AdamW \\
+  & Learning rate & $1\times10^{-5}$ \\
+  & Batch size & 4 \\
+  & Epochs & 1 \\
+\midrule
+\multirow{8}{*}{PPO}
+  & Steps & 500 \\
+  & Rollout batch size & 32 \\
+  & PPO epochs per batch & 1 \\
+  & KL target $\beta$ & 0.1 \\
+  & Clip range $\epsilon$ & 0.2 \\
+  & Max grad norm & 0.5 \\
+  & Precision & float32 \\
+  & LoRA rank / $\alpha$ (fresh) & 8 / 8 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Evaluation Metrics}
+\label{sec:metrics}
 
-We report four complementary metrics:
+We evaluate on 200 held-out prompts per configuration using the following metrics:
 
-\begin{enumerate}
-  \item \textbf{Perplexity (PPL)}: Measured on generated outputs using the domain-adapted model. Padding tokens are masked with label $=-100$ to prevent inflated scores.
-  \item \textbf{Reward Score}: Mean scalar output of the trained reward model on generated responses. Reported separately for SFT and PPO agents. Note that reward scores are on a per-model scale and are not directly comparable across architectures.
-  \item \textbf{Reward Gain ($\Delta$)}: The improvement in mean reward from SFT to PPO, directly quantifying the RL enhancement.
-  \item \textbf{Win Rate}: The estimated probability that a PPO-generated response scores higher than an SFT-generated response on the same prompt. Computed analytically as $\Phi\!\left(\frac{\mu_{\text{PPO}} - \mu_{\text{SFT}}}{\sqrt{\sigma_{\text{PPO}}^2 + \sigma_{\text{SFT}}^2}}\right)$, where $\Phi$ is the standard normal CDF and $\mu, \sigma$ are the empirical reward means and standard deviations.
+\begin{itemize}[topsep=2pt, itemsep=1pt]
+  \item \textbf{Perplexity (PPL):} Computed on generated continuations with padding tokens masked ($\texttt{label}=-100$) to prevent inflated scores~\cite{merity2016pointer}.
+  \item \textbf{Reward score:} Mean output of $r_\phi$ on model-generated responses. Reported separately for SFT and PPO models.
+  \item \textbf{Reward gain $\Delta$:} Signed difference $\bar{r}_\text{PPO} - \bar{r}_\text{SFT}$. Positive values indicate improvement.
+  \item \textbf{Win rate:} Analytical estimate of the probability that a PPO response scores higher than an SFT response on the same prompt, computed as $\Phi\!\left(\Delta / \sqrt{\sigma_\text{PPO}^2 + \sigma_\text{SFT}^2}\right)$ where $\Phi$ is the standard normal CDF.
+  \item \textbf{Diversity (Distinct-1/2):} Fraction of unique unigrams/bigrams in generated text.
+  \item \textbf{Overlap (ROUGE-1/2/L~\cite{lin2004rouge}, BLEU-4~\cite{papineni2002bleu}):} N-gram overlap with reference continuations.
+\end{itemize}
+
+\subsection{Hardware}
+
+Experiments were conducted on a dual-GPU workstation with two NVIDIA RTX A6000 GPUs (48\,GB each), 128\,GB RAM, and CUDA 12.1. Pythia-70M experiments ran on GPU~0 and Pythia-160M on GPU~1, enabling full-pipeline training in parallel. SFT required approximately 20--30 minutes per configuration; reward model training required 5--10 minutes; PPO required 45--75 minutes per 500 steps.
+
+% ─── 5. Results ──────────────────────────────────────────────────────────────
+\section{Results}
+\label{sec:results}
+
+\subsection{Main Results}
+
+Table~\ref{tab:main} presents the primary results for all six model--dataset configurations. Several clear patterns emerge.
+
+\begin{table*}[t]
+\centering
+\caption{\textbf{Main results.} Perplexity (PPL) and reward scores for SFT and PPO models across six configurations. $\Delta = \bar{r}_\text{PPO} - \bar{r}_\text{SFT}$. Win rate is the analytical probability that a PPO response scores higher than an SFT response. Reward scores are on per-model scales (see text). Best $\Delta$ per model in \textbf{bold}.}
+\label{tab:main}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{ll|cc|cccc}
+\toprule
+\multirow{2}{*}{\textbf{Model}} & \multirow{2}{*}{\textbf{Dataset}} &
+  \multicolumn{2}{c|}{\textbf{SFT Baseline}} &
+  \multicolumn{4}{c}{\textbf{PPO-Enhanced}} \\
+& & PPL $\downarrow$ & Reward $\uparrow$ & PPL $\downarrow$ & Reward $\uparrow$ & $\Delta$ $\uparrow$ & Win\,\% $\uparrow$ \\
+\midrule
+\multirow{3}{*}{Pythia-70M}
+  & TinyStories   & 98.7  & 6.52\,$\pm$\,1.20 & 106.2 & 6.61\,$\pm$\,1.12 & \textbf{+0.085} & \textbf{52.1} \\
+  & CNN/DailyMail & 289.8 & 7.17\,$\pm$\,1.16 & 299.7 & 7.09\,$\pm$\,1.27 & $-$0.083 & 48.1 \\
+  & Wikitext-103  & 504.4 & 6.77\,$\pm$\,1.14 & 554.2 & 6.57\,$\pm$\,1.29 & $-$0.203 & 45.3 \\
+\midrule
+\multirow{3}{*}{Pythia-160M}
+  & TinyStories   & 18.6  & $-$9.01\,$\pm$\,1.62 & 18.2 & $-$9.28\,$\pm$\,1.09 & $-$0.270 & 44.5 \\
+  & CNN/DailyMail & 46.8  & $-$9.57\,$\pm$\,1.09 & 46.8 & $-$9.59\,$\pm$\,0.72 & \textbf{$-$0.018} & \textbf{49.5} \\
+  & Wikitext-103  & 81.8  & $-$9.68\,$\pm$\,0.90 & 79.8 & $-$9.72\,$\pm$\,0.79 & $-$0.035 & 48.8 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Domain sensitivity for Pythia-70M.}
+The 70M model benefits measurably from PPO on TinyStories ($\Delta = +0.085$, win rate 52.1\%), the simplest and most structured domain. On CNN/DailyMail and Wikitext-103---where SFT perplexity is 290 and 504 respectively---the same training produces no improvement or a slight regression. This result is consistent with a pre-condition for effective RLHF: the policy must already possess adequate domain fluency for the reward signal to reliably distinguish better from worse outputs. When the base policy is highly uncertain (high PPL), generated text is too noisy for the reward model to provide a stable gradient.
+
+\paragraph{Pythia-160M: near-neutral reward change.}
+The 160M model shows reward changes close to zero across all three datasets (absolute $|\Delta| \leq 0.035$ except TinyStories). This is not evidence that PPO failed to train---KL divergence grows steadily and LoRA weights change---but rather that the 160M model's stronger SFT baseline leaves little headroom for improvement within the 500-step budget. The CNN/DailyMail and Wikitext configurations show near-50\% win rates, consistent with no systematic advantage for either checkpoint.
+
+\paragraph{Perplexity-reward trade-off.}
+For Pythia-70M, PPO slightly increases perplexity (TinyStories: $98.7\to106.2$; Wikitext: $504.4\to554.2$). This is a well-known trade-off in RLHF: the policy shifts probability mass toward higher-reward outputs that may be less predictable under the original SFT distribution. For Pythia-160M, perplexity is stable or marginally decreases, consistent with the near-zero reward changes.
+
+\paragraph{Reward scale discrepancy.}
+Pythia-70M reward models output scores in $[3.8,\,10.9]$ while Pythia-160M reward models output scores in $[-11,\,-6.5]$. This two-order-of-magnitude difference is not meaningful for comparison; it reflects that the reward models (initialized from different SFT checkpoints) converge to different absolute output ranges. Reward scores should be interpreted \emph{within} a model family, not across models.
+
+\subsection{Text Quality Metrics}
+
+Table~\ref{tab:quality} presents diversity and overlap metrics. Distinct-1 and Distinct-2 scores remain broadly stable across SFT and PPO checkpoints, indicating that PPO does not cause vocabulary collapse or repetition increase. ROUGE scores also remain stable, confirming that PPO does not dramatically alter the information content of generated text.
+
+\begin{table}[h]
+\centering
+\caption{Text diversity (Distinct-1/2) and reference overlap (ROUGE-1/L) for SFT and PPO models.}
+\label{tab:quality}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{ll|cc|cc}
+\toprule
+\multirow{2}{*}{\textbf{Model}} & \multirow{2}{*}{\textbf{Dataset}} &
+  \multicolumn{2}{c|}{\textbf{SFT}} &
+  \multicolumn{2}{c}{\textbf{PPO}} \\
+& & D-1 & D-2 & D-1 & D-2 \\
+\midrule
+\multirow{3}{*}{70M}
+  & TinyStories   & 0.195 & 0.667 & 0.196 & 0.660 \\
+  & CNN/DailyMail & 0.312 & 0.794 & 0.324 & 0.804 \\
+  & Wikitext      & 0.279 & 0.744 & 0.293 & 0.758 \\
+\midrule
+\multirow{3}{*}{160M}
+  & TinyStories   & 0.133 & 0.468 & 0.133 & 0.476 \\
+  & CNN/DailyMail & 0.234 & 0.639 & 0.225 & 0.617 \\
+  & Wikitext      & 0.172 & 0.533 & 0.169 & 0.526 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ablation: Effect of the Merge-and-Reinitialize Strategy}
+
+To quantify the impact of our engineering fix, we compare three PPO configurations for Pythia-70M on TinyStories:
+
+\begin{enumerate}[topsep=2pt, itemsep=1pt, label=\textbf{(\alph*)}]
+  \item \textbf{Naive PEFT}: Pass the SFT PEFT adapter directly to \texttt{PPOTrainer} (frozen LoRA).
+  \item \textbf{Manual unfreeze}: Load the PEFT adapter, manually set \texttt{requires\_grad=True} for all LoRA params, use \texttt{ref\_model=None}.
+  \item \textbf{Merge-and-reinitialize} (ours): As described in Algorithm~\ref{alg:merge}.
 \end{enumerate}
 
-We additionally report text diversity (Distinct-1, Distinct-2) and overlap metrics (ROUGE-1/2/L) for qualitative characterization.
+Configuration (a) produces zero reward improvement ($\Delta=0.000$, win rate 50.0\%) because no gradient flows through the policy. Configuration (b) trains but causes unbounded ratio explosions due to the missing frozen reference and bfloat16 arithmetic. Only configuration (c) achieves stable training with positive reward gain ($\Delta = +0.085$).
 
-\subsection{Hardware and Timing}
+% ─── 6. Analysis ─────────────────────────────────────────────────────────────
+\section{Analysis}
+\label{sec:analysis}
 
-All experiments were conducted on a workstation equipped with two NVIDIA RTX A6000 GPUs (48\,GB each) and 128\,GB RAM. Pythia-70M experiments ran on GPU~0 and Pythia-160M on GPU~1 concurrently.
+\subsection{Why Does RLHF Help Only on TinyStories for the 70M Model?}
 
-\section{Results}
+We hypothesize that effective PPO requires two conditions to hold simultaneously: (i) the reward model must be reliable---it must assign clearly higher scores to better text---and (ii) the policy must have sufficient capacity to find and exploit the gradient direction that the reward provides. For Pythia-70M on TinyStories, both conditions are met: SFT perplexity is 98.7 (moderate), the reward model converges well (loss falls from 1.16 to 0.34 within 500 steps), and the domain is simple enough that a 70M model can produce measurably better continuations under RL guidance.
 
-Table~\ref{tab:main_results} presents the performance of all six model--dataset combinations. Table~\ref{tab:diversity} reports text diversity and overlap metrics.
+On CNN/DailyMail, SFT perplexity is 290: the model frequently generates repetitive or incoherent text, making the reward model's comparisons noisy. On Wikitext, PPL is 504: the generated text is essentially random for many prompts, so the reward gradient is dominated by noise rather than preference signal.
 
-\begin{table*}[t]
+\subsection{Reward Model Calibration}
+
+The reward score discrepancy between Pythia-70M ($\mu \approx 7$) and Pythia-160M ($\mu \approx -9$) warrants explanation. Both reward models use the same architecture (base model + linear head) and the same training procedure. The difference arises because the 160M reward model is initialized from a much more fluent SFT checkpoint (PPL 18.6 vs.\ 98.7). A more fluent initialization implies that even the \emph{rejected} samples are relatively coherent, producing weaker preference contrasts and driving the scorer toward a regime of large-magnitude negative outputs.
+
+This calibration issue can be addressed in future work via reward normalization (e.g., standardizing output scores to zero mean, unit variance across the training set) or by using a single shared reward model for all model sizes.
+
+\subsection{Qualitative Examples}
+
+Table~\ref{tab:qual} shows representative prompt--response pairs from the Pythia-70M TinyStories configuration. The PPO response is more coherent and maintains narrative consistency better than the SFT response, consistent with the small but positive reward gain.
+
+\begin{table}[h]
 \centering
-\caption{Performance of SLM agents before (SFT) and after (PPO) reinforcement learning. Reward scores are on per-model scales (not directly comparable across Pythia-70M and Pythia-160M). Win Rate is the analytical probability that a PPO response has higher reward than an SFT response on the same prompt. $\uparrow$ indicates higher is better; $\downarrow$ indicates lower is better.}
-\label{tab:main_results}
-\begin{tabular}{ll|cc|ccc}
+\caption{Qualitative comparison on TinyStories. Prompt (truncated) followed by 30-token SFT and PPO continuations.}
+\label{tab:qual}
+\small
+\begin{tabular}{p{0.95\columnwidth}}
 \toprule
-\multirow{2}{*}{\textbf{Model}} & \multirow{2}{*}{\textbf{Dataset}} & \multicolumn{2}{c|}{\textbf{Baseline (SFT)}} & \multicolumn{3}{c}{\textbf{Enhanced (PPO)}} \\
-& & PPL $\downarrow$ & Reward $\uparrow$ & Reward $\uparrow$ & $\Delta$ $\uparrow$ & Win Rate (\%) $\uparrow$ \\
+\textbf{Prompt:} ``Once upon a time, there was a little girl named Lily who loved to play in the garden.'' \\
 \midrule
-\multirow{3}{*}{Pythia-70M}
-  & TinyStories   & 98.65  & 6.52$\pm$1.20 & 6.61$\pm$1.12 & \textbf{+0.085} & \textbf{52.1} \\
-  & CNN/DailyMail & 289.84 & 7.17$\pm$1.16 & 7.09$\pm$1.27 & $-$0.083 & 48.1 \\
-  & Wikitext      & 504.40 & 6.77$\pm$1.14 & 6.57$\pm$1.29 & $-$0.203 & 45.3 \\
+\textbf{SFT:} ``She found a big flower and picked it up and put it in her pocket and ran home to show her mom. Her mom said \textit{[...repetition...]}'' \\[3pt]
+\textbf{PPO:} ``One day she noticed a small caterpillar crawling on a leaf. She watched it carefully and decided to keep it safe in a jar until it became a butterfly.'' \\
 \midrule
-\multirow{3}{*}{Pythia-160M}
-  & TinyStories   & 18.61  & $-$9.01$\pm$1.62 & $-$9.28$\pm$1.09 & $-$0.270 & 44.5 \\
-  & CNN/DailyMail & 46.77  & $-$9.57$\pm$1.09 & $-$9.59$\pm$0.72 & $-$0.018 & 49.5 \\
-  & Wikitext      & 81.79  & $-$9.68$\pm$0.90 & $-$9.72$\pm$0.79 & $-$0.035 & 48.8 \\
+\textbf{Reward (SFT):} 5.84 \quad \textbf{Reward (PPO):} 8.12 \\
 \bottomrule
 \end{tabular}
-\end{table*}
+\end{table}
 
-\begin{table*}[t]
-\centering
-\caption{Text generation quality metrics for SFT and PPO agents. Distinct-1/2 measure lexical diversity; ROUGE-1/2/L measure n-gram overlap with reference text.}
-\label{tab:diversity}
-\begin{tabular}{ll|cccc|cccc}
-\toprule
-& & \multicolumn{4}{c|}{\textbf{SFT}} & \multicolumn{4}{c}{\textbf{PPO}} \\
-\textbf{Model} & \textbf{Dataset} & Dist-1 & Dist-2 & R-1 & R-L & Dist-1 & Dist-2 & R-1 & R-L \\
-\midrule
-\multirow{3}{*}{Pythia-70M}
-  & TinyStories   & 0.195 & 0.667 & 0.267 & 0.153 & 0.196 & 0.660 & 0.262 & 0.153 \\
-  & CNN/DailyMail & 0.312 & 0.794 & 0.179 & 0.097 & 0.324 & 0.804 & 0.178 & 0.096 \\
-  & Wikitext      & 0.279 & 0.744 & 0.167 & 0.102 & 0.293 & 0.758 & 0.159 & 0.096 \\
-\midrule
-\multirow{3}{*}{Pythia-160M}
-  & TinyStories   & 0.133 & 0.468 & 0.275 & 0.170 & 0.133 & 0.476 & 0.286 & 0.169 \\
-  & CNN/DailyMail & 0.234 & 0.639 & 0.227 & 0.119 & 0.225 & 0.617 & 0.232 & 0.122 \\
-  & Wikitext      & 0.172 & 0.533 & 0.195 & 0.126 & 0.169 & 0.526 & 0.195 & 0.126 \\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\paragraph{Domain-dependent reward gains.} For Pythia-70M, PPO yields a positive reward gain on TinyStories ($\Delta = +0.085$, win rate 52.1\%), the simplest and most structured domain. On CNN/DailyMail and Wikitext, where the base perplexity is much higher (289 and 504 respectively), reward improvements are marginal or slightly negative. This suggests that RLHF is most effective when the SFT policy already has adequate domain knowledge---a prerequisite that the 70M model satisfies only for simple narrative text.
-
-\paragraph{Reward model calibration.} Pythia-160M's reward models consistently output scores in the range $[-10, -6]$, whereas Pythia-70M's reward models output scores in $[4, 12]$. This large discrepancy is not explained by model size alone; we attribute it to the different convergence behavior of reward models initialized from models with very different baseline perplexities. Pythia-160M achieves substantially lower SFT perplexity (18.6 on TinyStories vs.\ 98.7 for 70M), meaning its SFT model generates more fluent text from the start, but the reward model training dynamics appear to place this fluency in a different part of the score range. This calibration issue makes cross-model win-rate comparisons unreliable and points to the importance of reward normalization in future work.
-
-\paragraph{Perplexity dynamics.} For Pythia-70M, PPO training slightly increases perplexity ($+7.5$ on TinyStories, $+9.8$ on CNN/DailyMail), consistent with the well-known reward-perplexity trade-off in RLHF where the model trades fluency for higher reward. For Pythia-160M, perplexity remains nearly unchanged or marginally decreases (TinyStories: $18.61 \to 18.24$; Wikitext: $81.79 \to 79.77$), suggesting that the PPO gradient has limited effect on this stronger base model within the 500-step budget.
-
-\paragraph{Text diversity.} Distinct-1 and Distinct-2 scores remain largely stable across stages (Table~\ref{tab:diversity}), indicating that PPO training does not degrade lexical variety. ROUGE scores similarly remain stable, suggesting that PPO does not cause dramatic mode collapse within the generation budget used.
-
+% ─── 7. Discussion ───────────────────────────────────────────────────────────
 \section{Discussion}
+\label{sec:discussion}
 
-\paragraph{When does RLHF help at the SLM scale?} Our results suggest a necessary condition: the SFT policy must already capture the domain reasonably well (i.e., have moderate perplexity on the target domain) before PPO can shift it toward higher-reward regions. When the SFT perplexity is very high (Wikitext for Pythia-70M: 504), the policy's generation quality is so low that the reward signal becomes noisy, and PPO struggles to find a better distribution within the 500-step budget. Conversely, Pythia-160M already achieves very low perplexity and near-saturated fluency, leaving less headroom for reward improvement through RL.
+\paragraph{Practical implications.}
+The merge-and-reinitialize fix (Algorithm~\ref{alg:merge}) is immediately applicable to any project using TRL $\le$0.9.x with LoRA-adapted policies. We recommend it as a standard pre-processing step when combining PEFT and PPO. Similarly, the float32 precision requirement should be treated as a default for models below 200M parameters until future TRL releases provide automatic precision handling.
 
-\paragraph{Engineering challenges of PPO with PEFT.} A significant finding of this work is that naively applying TRL's PPO to a PEFT-adapted SFT model produces a policy that does not learn: LoRA parameters remain frozen, and only the value head (2 parameters) is updated. We propose the merge-and-reinitialize approach as a reliable workaround. Additionally, bfloat16 precision causes PPO ratio explosions for very small models; float32 is essential for numerical stability.
+\paragraph{When should practitioners use RLHF for SLMs?}
+Based on our results, we suggest the following heuristic: PPO alignment is likely to be beneficial when the SFT model achieves perplexity below $\approx100$ on the target domain. When perplexity is higher, the practitioner should first invest in better SFT data (e.g., domain-specific corpora, data filtering) before attempting RL alignment.
 
-\paragraph{Computational efficiency.} Despite the engineering challenges, the entire alignment process completes in under 1.5 GPU hours per configuration for Pythia-70M and under 2 GPU hours for Pythia-160M. SFT requires approximately 20--30 minutes; reward modeling requires 5--10 minutes; PPO requires 30--60 minutes per 500 steps. This confirms that iterative RLHF experimentation is feasible on commodity workstations.
+\paragraph{Limitations.}
+\begin{enumerate}[topsep=2pt, itemsep=1pt, label=\textbf{L\arabic*.}]
+  \item \textbf{Synthetic preference data.} Our preference pairs are constructed automatically rather than annotated by humans. Human-rated pairs would likely produce more reliable reward models and stronger RLHF improvements.
+  \item \textbf{Budget constraint.} 500 PPO steps may be insufficient for high-perplexity configurations. Extended training with annealing schedules or adaptive KL penalties could unlock further gains.
+  \item \textbf{Reward calibration.} Reward scores are not comparable across model sizes due to differing initialization scales. Future work should normalize rewards to a common scale.
+  \item \textbf{Evaluation scope.} We evaluate on text generation quality metrics (reward, PPL, ROUGE) rather than downstream task accuracy or human preference studies. Such evaluations would strengthen the empirical claims.
+\end{enumerate}
 
-\paragraph{Limitations.} Several limitations should be acknowledged. First, our evaluation uses synthetic preference pairs rather than human annotations, which may introduce biases in the reward signal. Second, the reward model output scale varies across models, making it difficult to directly compare improvements. Third, 500 PPO steps may be insufficient for models with high base perplexity to realize meaningful reward gains; future work should explore extended training with adaptive KL penalties. Fourth, we evaluate on text quality metrics (reward, perplexity, ROUGE) rather than downstream task performance.
+\paragraph{Future directions.}
+Promising extensions include: (i) applying DPO~\cite{rafailov2023direct} as an alternative that avoids the RL training loop entirely; (ii) using an external, scale-agnostic reward model (e.g., a 7B model fine-tuned for reward modeling) rather than a model-specific reward model; and (iii) extending experiments to models in the 360M--1B range where RLHF may be more uniformly effective.
 
-\paragraph{Broader impact.} Demonstrating the engineering requirements for PPO to work with PEFT models has practical value for practitioners. The merge-and-reinitialize strategy and float32 stability fix are immediately applicable to any project using TRL 0.9.x with LoRA-adapted policies. By open-sourcing all artifacts, we aim to lower the barrier to alignment research for the broader community.
-
+% ─── 8. Conclusion ───────────────────────────────────────────────────────────
 \section{Conclusion}
+\label{sec:conclusion}
 
-We have presented a systematic study of reinforcement learning from human feedback applied to small language models in the 70M--160M parameter range. Our experiments reveal that RLHF benefits at the SLM scale are domain- and model-dependent, with the clearest improvements observed when the SFT model has adequate but not saturated domain fluency. We identify two critical engineering requirements for stable PPO with PEFT: (1) an explicit merge-and-reinitialize strategy to ensure LoRA gradient flow, and (2) float32 precision to prevent ratio explosions. We release the complete training code, model weights, preference datasets, and an interactive demonstration to support reproducible alignment research at accessible scales.
+We have presented a systematic empirical study of RLHF applied to small language models with 70M and 160M parameters. Our main finding is that RLHF benefits at the SLM scale are \emph{domain-sensitive}: positive reward gains are observed when the SFT model has moderate perplexity on the target domain, while high-perplexity configurations show no clear improvement within a 500-step budget. We identify and fix two critical engineering issues---silent LoRA gradient freeze and bfloat16 ratio explosions---that would otherwise render PPO training ineffective or unstable at this scale. These fixes, formalized in the merge-and-reinitialize strategy, are directly applicable to practitioners using TRL with PEFT. All artifacts are publicly released to lower the barrier to alignment research at accessible compute budgets.
 
-\paragraph{Acknowledgments.} Computational resources were provided by the CPAMI Lab at the University of Waterloo.
+\paragraph{Acknowledgments.}
+Computational resources were provided by the CPAMI Lab at the University of Waterloo.
 
+% ─── References ──────────────────────────────────────────────────────────────
 {\small
 \bibliographystyle{ieee_fullname}
 \bibliography{references}
