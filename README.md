@@ -8,12 +8,6 @@
   <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.5%2B-EE4C2C.svg" alt="PyTorch"></a>
 </p>
 
-<p align="center">
-  <b>Md Rezwanul Haque</b><br>
-  University of Waterloo<br>
-  <a href="mailto:mr3haque@uwaterloo.ca">mr3haque@uwaterloo.ca</a>
-</p>
-
 ---
 
 ## Abstract
@@ -128,8 +122,6 @@ Pre-trained SLM
 ---
 
 ## Models & Datasets
-
-All artifacts are hosted on the [slm-rl-agent](https://huggingface.co/slm-rl-agent) HuggingFace organization.
 
 All datasets and model checkpoints are hosted in a single repository:
 **[mr3haque/SLM-RL-Agent](https://huggingface.co/datasets/mr3haque/SLM-RL-Agent)**
