@@ -242,13 +242,44 @@ def main():
         del merged_model, peft_model, base_model
         torch.cuda.empty_cache()
 
+        # Auto-detect LoRA target modules for the merged model architecture
+        def get_target_modules(model_path):
+            """Return target module names based on layer names present in the model."""
+            from transformers import AutoConfig
+            import json, os
+            # Peek at config to determine arch
+            cfg_path = os.path.join(model_path, "config.json")
+            if os.path.exists(cfg_path):
+                cfg = json.load(open(cfg_path))
+                arch = cfg.get("architectures", [""])[0].lower()
+                model_type = cfg.get("model_type", "").lower()
+            else:
+                arch, model_type = "", ""
+
+            # Pythia / GPT-NeoX: uses query_key_value fused projection + dense
+            if "neox" in arch or "pythia" in model_type or "gpt_neox" in model_type:
+                return ["query_key_value", "dense"]
+            # LLaMA / Mistral / SmolLM2 / Qwen style: separate q/k/v/o projections
+            elif any(x in arch or x in model_type for x in
+                     ["llama", "mistral", "smollm", "qwen", "falcon", "phi"]):
+                return ["q_proj", "v_proj", "o_proj", "gate_proj", "up_proj"]
+            # GPT-2 style
+            elif "gpt2" in arch or "gpt2" in model_type:
+                return ["c_attn", "c_proj"]
+            # Fallback: let PEFT scan all linear layers
+            else:
+                return "all-linear"
+
+        target_mods = get_target_modules(merged_dir)
+        logger.info(f"PPO LoRA target modules: {target_mods}")
+
         # Load merged model with fresh LoRA (small alpha for stability)
         logger.info("Loading merged model with fresh LoRA for PPO...")
         ppo_lora_config = LoraConfig(
             r=args.lora_r,
             lora_alpha=args.lora_r,  # alpha=r (not 2r) for smaller initial updates
             lora_dropout=0.0,
-            target_modules=["query_key_value", "dense"],  # fewer targets for stability
+            target_modules=target_mods,
             task_type="CAUSAL_LM",
         )
         merged_kwargs = {"trust_remote_code": True, "torch_dtype": torch.float32}
