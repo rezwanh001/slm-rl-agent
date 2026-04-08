@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg" alt="arXiv"></a>
-  <a href="https://huggingface.co/slm-rl-agent"><img src="https://img.shields.io/badge/🤗%20HuggingFace-slm--rl--agent-yellow" alt="HuggingFace"></a>
+  <a href="https://huggingface.co/datasets/mr3haque/SLM-RL-Agent"><img src="https://img.shields.io/badge/🤗%20HuggingFace-SLM--RL--Agent-yellow" alt="HuggingFace"></a>
   <a href="https://github.com/rezwanh001/slm-rl-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
   <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.5%2B-EE4C2C.svg" alt="PyTorch"></a>
@@ -131,32 +131,45 @@ Pre-trained SLM
 
 All artifacts are hosted on the [slm-rl-agent](https://huggingface.co/slm-rl-agent) HuggingFace organization.
 
-### Datasets
+All datasets and model checkpoints are hosted in a single repository:
+**[mr3haque/SLM-RL-Agent](https://huggingface.co/datasets/mr3haque/SLM-RL-Agent)**
 
-| Dataset | HuggingFace | Description |
-|---------|-------------|-------------|
-| TinyStories (preference) | [slm-rl-agent/slm-rl-tinystories](https://huggingface.co/datasets/slm-rl-agent/slm-rl-tinystories) | SFT + preference pairs for simple narrative text |
-| CNN/DailyMail (preference) | [slm-rl-agent/slm-rl-cnn-dailymail](https://huggingface.co/datasets/slm-rl-agent/slm-rl-cnn-dailymail) | SFT + preference pairs for news articles |
-| Wikitext-103 (preference) | [slm-rl-agent/slm-rl-wikitext](https://huggingface.co/datasets/slm-rl-agent/slm-rl-wikitext) | SFT + preference pairs for encyclopedic text |
+### Repository Structure
 
-Each dataset contains:
-- `sft_train.json` / `sft_eval.json` — domain text for supervised fine-tuning
-- `preference_train.json` / `preference_eval.json` — `{prompt, chosen, rejected}` pairs for reward modeling
+```
+mr3haque/SLM-RL-Agent
+├── datasets/
+│   ├── tinystories/        {sft_train, sft_eval, preference_train, preference_eval}.json
+│   ├── cnn_dailymail/      same
+│   └── wikitext/           same
+├── models/
+│   ├── pythia-70m/         {tinystories, cnn_dailymail, wikitext} × {sft, ppo}/
+│   ├── pythia-160m/        same
+│   ├── pythia-410m/        *(uploading after training)*
+│   ├── smollm2-135m/       *(uploading after training)*
+│   └── smollm2-360m/       *(uploading after training)*
+└── results/
+    └── all_results.json
+```
 
-### Model Checkpoints
+### Loading a Model
 
-| Model | Stage | TinyStories | CNN/DailyMail | Wikitext-103 |
-|-------|-------|-------------|---------------|--------------|
-| Pythia-70M | SFT | [🤗](https://huggingface.co/slm-rl-agent/pythia-70m-tinystories-sft) | [🤗](https://huggingface.co/slm-rl-agent/pythia-70m-cnn-dailymail-sft) | [🤗](https://huggingface.co/slm-rl-agent/pythia-70m-wikitext-sft) |
-| Pythia-70M | PPO | [🤗](https://huggingface.co/slm-rl-agent/pythia-70m-tinystories-ppo) | [🤗](https://huggingface.co/slm-rl-agent/pythia-70m-cnn-dailymail-ppo) | [🤗](https://huggingface.co/slm-rl-agent/pythia-70m-wikitext-ppo) |
-| Pythia-160M | SFT | [🤗](https://huggingface.co/slm-rl-agent/pythia-160m-tinystories-sft) | [🤗](https://huggingface.co/slm-rl-agent/pythia-160m-cnn-dailymail-sft) | [🤗](https://huggingface.co/slm-rl-agent/pythia-160m-wikitext-sft) |
-| Pythia-160M | PPO | [🤗](https://huggingface.co/slm-rl-agent/pythia-160m-tinystories-ppo) | [🤗](https://huggingface.co/slm-rl-agent/pythia-160m-cnn-dailymail-ppo) | [🤗](https://huggingface.co/slm-rl-agent/pythia-160m-wikitext-ppo) |
-| Pythia-410M | SFT | *(training)* | *(training)* | *(training)* |
-| Pythia-410M | PPO | *(training)* | *(training)* | *(training)* |
-| SmolLM2-135M | SFT | *(training)* | *(training)* | *(training)* |
-| SmolLM2-135M | PPO | *(training)* | *(training)* | *(training)* |
-| SmolLM2-360M | SFT | *(training)* | *(training)* | *(training)* |
-| SmolLM2-360M | PPO | *(training)* | *(training)* | *(training)* |
+```python
+from huggingface_hub import snapshot_download
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import PeftModel
+
+# Download a specific checkpoint (e.g., pythia-70m PPO on TinyStories)
+path = snapshot_download(
+    repo_id="mr3haque/SLM-RL-Agent",
+    allow_patterns="models/pythia-70m/tinystories/ppo/**"
+)
+adapter_dir = f"{path}/models/pythia-70m/tinystories/ppo"
+
+base = AutoModelForCausalLM.from_pretrained("EleutherAI/pythia-70m-deduped")
+tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
+model = PeftModel.from_pretrained(base, adapter_dir).merge_and_unload()
+```
 
 ---
 
