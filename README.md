@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg" alt="arXiv"></a>
-  <a href="https://huggingface.co/datasets/mr3haque/SLM-RL-Agent"><img src="https://img.shields.io/badge/🤗%20HuggingFace-SLM--RL--Agent-yellow" alt="HuggingFace"></a>
+  <a href="https://huggingface.co/mr3haque"><img src="https://img.shields.io/badge/🤗%20HuggingFace-mr3haque-yellow" alt="HuggingFace"></a>
   <a href="https://github.com/rezwanh001/slm-rl-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
   <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.5%2B-EE4C2C.svg" alt="PyTorch"></a>
@@ -164,44 +164,60 @@ PPO consistently preserves or slightly improves diversity — no repetition coll
 
 ## Models & Datasets
 
-All datasets and model checkpoints are hosted in a single repository:
-**[mr3haque/SLM-RL-Agent](https://huggingface.co/datasets/mr3haque/SLM-RL-Agent)**
+All 3 preference datasets and 30 trained checkpoints are hosted on the Hugging Face Hub under **[mr3haque](https://huggingface.co/mr3haque)**. Each dataset and each (model × dataset × stage) combination is published as its own repository so it can be loaded with a single `from_pretrained` call.
 
-### Repository Structure
+### Datasets (3)
 
-```
-mr3haque/SLM-RL-Agent
-├── datasets/
-│   ├── tinystories/        {sft_train, sft_eval, preference_train, preference_eval}.json
-│   ├── cnn_dailymail/      same
-│   └── wikitext/           same
-├── models/
-│   ├── pythia-70m/         {tinystories, cnn_dailymail, wikitext} × {sft, ppo}/
-│   ├── pythia-160m/        same
-│   ├── pythia-410m/        *(uploading after training)*
-│   ├── smollm2-135m/       *(uploading after training)*
-│   └── smollm2-360m/       *(uploading after training)*
-└── results/
-    └── all_results.json
-```
+| Dataset | Source | 🤗 Repo |
+|---|---|---|
+| TinyStories RLHF   | [`roneneldan/TinyStories`](https://huggingface.co/datasets/roneneldan/TinyStories) | [`mr3haque/slm-rl-tinystories-rlhf`](https://huggingface.co/datasets/mr3haque/slm-rl-tinystories-rlhf) |
+| CNN/DailyMail RLHF | [`abisee/cnn_dailymail`](https://huggingface.co/datasets/abisee/cnn_dailymail) | [`mr3haque/slm-rl-cnn-dailymail-rlhf`](https://huggingface.co/datasets/mr3haque/slm-rl-cnn-dailymail-rlhf) |
+| Wikitext-103 RLHF  | [`Salesforce/wikitext`](https://huggingface.co/datasets/Salesforce/wikitext) (`wikitext-103-raw-v1`) | [`mr3haque/slm-rl-wikitext-rlhf`](https://huggingface.co/datasets/mr3haque/slm-rl-wikitext-rlhf) |
 
-### Loading a Model
+Each dataset repo contains four JSON files: `sft_train`, `sft_eval`, `preference_train`, `preference_eval`.
+
+### Models — SFT (15 LoRA adapters)
+
+Each **SFT** repo contains a LoRA adapter over the corresponding public base model. Load with `peft.PeftModel.from_pretrained`.
+
+| Base | TinyStories | CNN/DailyMail | Wikitext-103 |
+|---|---|---|---|
+| Pythia-70M   | [`slm-rl-pythia-70m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-sft-tinystories)    | [`slm-rl-pythia-70m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-sft-cnn_dailymail)    | [`slm-rl-pythia-70m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-sft-wikitext)    |
+| Pythia-160M  | [`slm-rl-pythia-160m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-sft-tinystories)  | [`slm-rl-pythia-160m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-sft-cnn_dailymail)  | [`slm-rl-pythia-160m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-sft-wikitext)  |
+| Pythia-410M  | [`slm-rl-pythia-410m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-sft-tinystories)  | [`slm-rl-pythia-410m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-sft-cnn_dailymail)  | [`slm-rl-pythia-410m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-sft-wikitext)  |
+| SmolLM2-135M | [`slm-rl-smollm2-135m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-sft-tinystories)| [`slm-rl-smollm2-135m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-sft-cnn_dailymail)| [`slm-rl-smollm2-135m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-sft-wikitext)|
+| SmolLM2-360M | [`slm-rl-smollm2-360m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-sft-tinystories)| [`slm-rl-smollm2-360m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-sft-cnn_dailymail)| [`slm-rl-smollm2-360m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-sft-wikitext)|
+
+### Models — PPO / RLHF (15 merged full models)
+
+Each **PPO** repo is a **fully merged** model (base ← SFT LoRA ← PPO LoRA), so you can load it directly with `AutoModelForCausalLM.from_pretrained` — no PEFT needed.
+
+| Base | TinyStories | CNN/DailyMail | Wikitext-103 |
+|---|---|---|---|
+| Pythia-70M   | [`slm-rl-pythia-70m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-ppo-tinystories)    | [`slm-rl-pythia-70m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-ppo-cnn_dailymail)    | [`slm-rl-pythia-70m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-ppo-wikitext)    |
+| Pythia-160M  | [`slm-rl-pythia-160m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-ppo-tinystories)  | [`slm-rl-pythia-160m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-ppo-cnn_dailymail)  | [`slm-rl-pythia-160m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-ppo-wikitext)  |
+| Pythia-410M  | [`slm-rl-pythia-410m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-ppo-tinystories)  | [`slm-rl-pythia-410m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-ppo-cnn_dailymail)  | [`slm-rl-pythia-410m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-ppo-wikitext)  |
+| SmolLM2-135M | [`slm-rl-smollm2-135m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-ppo-tinystories)| [`slm-rl-smollm2-135m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-ppo-cnn_dailymail)| [`slm-rl-smollm2-135m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-ppo-wikitext)|
+| SmolLM2-360M | [`slm-rl-smollm2-360m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-ppo-tinystories)| [`slm-rl-smollm2-360m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-ppo-cnn_dailymail)| [`slm-rl-smollm2-360m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-ppo-wikitext)|
+
+### Loading an SFT adapter
 
 ```python
-from huggingface_hub import snapshot_download
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
-# Download a specific checkpoint (e.g., pythia-70m PPO on TinyStories)
-path = snapshot_download(
-    repo_id="mr3haque/SLM-RL-Agent",
-    allow_patterns="models/pythia-70m/tinystories/ppo/**"
-)
-adapter_dir = f"{path}/models/pythia-70m/tinystories/ppo"
+base = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM2-360M")
+tok  = AutoTokenizer.from_pretrained("mr3haque/slm-rl-smollm2-360m-sft-wikitext")
+model = PeftModel.from_pretrained(base, "mr3haque/slm-rl-smollm2-360m-sft-wikitext")
+```
 
-base = AutoModelForCausalLM.from_pretrained("EleutherAI/pythia-70m-deduped")
-tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
-model = PeftModel.from_pretrained(base, adapter_dir).merge_and_unload()
+### Loading a PPO model (single-line, merged)
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+tok   = AutoTokenizer.from_pretrained("mr3haque/slm-rl-smollm2-360m-ppo-wikitext")
+model = AutoModelForCausalLM.from_pretrained("mr3haque/slm-rl-smollm2-360m-ppo-wikitext")
 ```
 
 ---
@@ -365,28 +381,47 @@ The demo allows side-by-side comparison of SFT and PPO agents for all trained co
 
 ```
 slm-rl-agent/
-├── paper/
-│   ├── main.tex              # Full paper (LaTeX)
-│   ├── references.bib        # Bibliography
-│   └── figures/
-│       └── pipeline.pdf      # Pipeline diagram
+├── src/slm_rl_agent/             # Core library
+│   ├── data/                     # Dataset builders (SFT + preference pairs)
+│   ├── models/                   # Base-model wrappers and LoRA utilities
+│   ├── rewards/                  # Bradley–Terry reward model
+│   ├── rl/                       # PPO / DPO trainers with SLM-specific fixes
+│   └── utils/                    # Logging, eval metrics, HF helpers
+│
 ├── scripts/
-│   ├── prepare_all_datasets.py
-│   ├── train_sft.py
-│   ├── train_reward.py
-│   ├── train_ppo.py          # Includes merge-and-reinitialize fix
-│   ├── evaluate.py
-│   └── run_all_experiments.sh
-├── src/                      # Core library modules
-├── configs/                  # YAML configuration files
-├── data/                     # Prepared datasets (generated, not tracked)
-├── outputs/                  # Model checkpoints (generated, not tracked)
+│   ├── prepare_all_datasets.py   # Build SFT + preference data for all 3 corpora
+│   ├── train_sft.py              # LoRA SFT stage
+│   ├── train_reward.py           # Bradley–Terry reward-model training
+│   ├── train_ppo.py              # PPO with merge-and-reinitialize + float32 fix
+│   ├── train_dpo.py              # DPO alternative (baseline)
+│   ├── evaluate.py               # Evaluate a (model, dataset) pair
+│   ├── evaluate_baseline.py      # Evaluate SOTA instruct baselines
+│   ├── aggregate_results.py      # Build results/all_results.json from eval dirs
+│   ├── upload_to_hf.py           # Push datasets + SFT adapters + merged PPO models
+│   ├── eval_all_sft.sh           # Eval loop for the 15 SFT configs
+│   ├── eval_all_ppo.sh           # Eval loop for the 15 PPO configs
+│   ├── eval_baselines.sh         # Eval loop for SOTA baselines
+│   ├── run_all_experiments.sh    # End-to-end 15-config training driver
+│   ├── run_full_pipeline.sh      # Single-config SFT → reward → PPO → eval
+│   ├── run_optimal.sh            # Optimal-hyperparam helper
+│   └── run_ppo_only.sh           # PPO-only re-run helper
+│
+├── configs/                      # YAML hyperparameter configs
+│   ├── model_configs.yaml
+│   └── training_configs.yaml
+│
+├── data/                         # Generated preference datasets (gitignored)
+├── outputs/                      # Training + eval artefacts (gitignored)
 ├── results/
-│   └── all_results.json      # Aggregated evaluation metrics
-├── app.py                    # Gradio interactive demo
+│   └── all_results.json          # Canonical aggregated metrics (all 15 configs + baselines)
+│
+├── app.py                        # Gradio interactive demo (side-by-side SFT vs PPO)
 ├── requirements.txt
-└── setup.py
+├── setup.py / pyproject.toml     # Installable as `slm-rl-agent`
+└── README.md                     # You are here
 ```
+
+> **Note on the paper draft.** The LaTeX source for the paper lives under `paper/` locally but is **intentionally not tracked** in this repository (see [.gitignore](.gitignore)). The compiled PDF will be released on arXiv when the paper is posted.
 
 ---
 
