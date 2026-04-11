@@ -164,60 +164,84 @@ PPO consistently preserves or slightly improves diversity — no repetition coll
 
 ## Models & Datasets
 
-All 3 preference datasets and 30 trained checkpoints are hosted on the Hugging Face Hub under **[mr3haque](https://huggingface.co/mr3haque)**. Each dataset and each (model × dataset × stage) combination is published as its own repository so it can be loaded with a single `from_pretrained` call.
+Everything from this paper lives in exactly **two** Hugging Face repositories:
 
-### Datasets (3)
-
-| Dataset | Source | 🤗 Repo |
+| Artefact | 🤗 Repo | Contents |
 |---|---|---|
-| TinyStories RLHF   | [`roneneldan/TinyStories`](https://huggingface.co/datasets/roneneldan/TinyStories) | [`mr3haque/slm-rl-tinystories-rlhf`](https://huggingface.co/datasets/mr3haque/slm-rl-tinystories-rlhf) |
-| CNN/DailyMail RLHF | [`abisee/cnn_dailymail`](https://huggingface.co/datasets/abisee/cnn_dailymail) | [`mr3haque/slm-rl-cnn-dailymail-rlhf`](https://huggingface.co/datasets/mr3haque/slm-rl-cnn-dailymail-rlhf) |
-| Wikitext-103 RLHF  | [`Salesforce/wikitext`](https://huggingface.co/datasets/Salesforce/wikitext) (`wikitext-103-raw-v1`) | [`mr3haque/slm-rl-wikitext-rlhf`](https://huggingface.co/datasets/mr3haque/slm-rl-wikitext-rlhf) |
+| **Datasets** | **[`mr3haque/SLM-RL-Agent-Data`](https://huggingface.co/datasets/mr3haque/SLM-RL-Agent-Data)** | 3 preprocessed corpora × 4 splits each (`sft_train`, `sft_eval`, `preference_train`, `preference_eval`) |
+| **Models**   | **[`mr3haque/SLM-RL-Agent`](https://huggingface.co/mr3haque/SLM-RL-Agent)**                  | 15 SFT LoRA adapters **+** 15 fully-merged PPO models, organised under `sft/{model}/{dataset}/` and `ppo/{model}/{dataset}/` |
 
-Each dataset repo contains four JSON files: `sft_train`, `sft_eval`, `preference_train`, `preference_eval`.
+### Dataset repo layout
 
-### Models — SFT (15 LoRA adapters)
+```
+mr3haque/SLM-RL-Agent-Data
+└── datasets/
+    ├── tinystories/    {sft_train, sft_eval, preference_train, preference_eval}.json
+    ├── cnn_dailymail/  same
+    └── wikitext/       same
+```
 
-Each **SFT** repo contains a LoRA adapter over the corresponding public base model. Load with `peft.PeftModel.from_pretrained`.
-
-| Base | TinyStories | CNN/DailyMail | Wikitext-103 |
-|---|---|---|---|
-| Pythia-70M   | [`slm-rl-pythia-70m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-sft-tinystories)    | [`slm-rl-pythia-70m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-sft-cnn_dailymail)    | [`slm-rl-pythia-70m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-sft-wikitext)    |
-| Pythia-160M  | [`slm-rl-pythia-160m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-sft-tinystories)  | [`slm-rl-pythia-160m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-sft-cnn_dailymail)  | [`slm-rl-pythia-160m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-sft-wikitext)  |
-| Pythia-410M  | [`slm-rl-pythia-410m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-sft-tinystories)  | [`slm-rl-pythia-410m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-sft-cnn_dailymail)  | [`slm-rl-pythia-410m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-sft-wikitext)  |
-| SmolLM2-135M | [`slm-rl-smollm2-135m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-sft-tinystories)| [`slm-rl-smollm2-135m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-sft-cnn_dailymail)| [`slm-rl-smollm2-135m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-sft-wikitext)|
-| SmolLM2-360M | [`slm-rl-smollm2-360m-sft-tinystories`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-sft-tinystories)| [`slm-rl-smollm2-360m-sft-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-sft-cnn_dailymail)| [`slm-rl-smollm2-360m-sft-wikitext`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-sft-wikitext)|
-
-### Models — PPO / RLHF (15 merged full models)
-
-Each **PPO** repo is a **fully merged** model (base ← SFT LoRA ← PPO LoRA), so you can load it directly with `AutoModelForCausalLM.from_pretrained` — no PEFT needed.
-
-| Base | TinyStories | CNN/DailyMail | Wikitext-103 |
-|---|---|---|---|
-| Pythia-70M   | [`slm-rl-pythia-70m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-ppo-tinystories)    | [`slm-rl-pythia-70m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-ppo-cnn_dailymail)    | [`slm-rl-pythia-70m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-70m-ppo-wikitext)    |
-| Pythia-160M  | [`slm-rl-pythia-160m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-ppo-tinystories)  | [`slm-rl-pythia-160m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-ppo-cnn_dailymail)  | [`slm-rl-pythia-160m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-160m-ppo-wikitext)  |
-| Pythia-410M  | [`slm-rl-pythia-410m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-ppo-tinystories)  | [`slm-rl-pythia-410m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-ppo-cnn_dailymail)  | [`slm-rl-pythia-410m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-pythia-410m-ppo-wikitext)  |
-| SmolLM2-135M | [`slm-rl-smollm2-135m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-ppo-tinystories)| [`slm-rl-smollm2-135m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-ppo-cnn_dailymail)| [`slm-rl-smollm2-135m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-smollm2-135m-ppo-wikitext)|
-| SmolLM2-360M | [`slm-rl-smollm2-360m-ppo-tinystories`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-ppo-tinystories)| [`slm-rl-smollm2-360m-ppo-cnn_dailymail`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-ppo-cnn_dailymail)| [`slm-rl-smollm2-360m-ppo-wikitext`](https://huggingface.co/mr3haque/slm-rl-smollm2-360m-ppo-wikitext)|
-
-### Loading an SFT adapter
+Load a specific split via the datasets library:
 
 ```python
+from datasets import load_dataset
+
+ds = load_dataset("mr3haque/SLM-RL-Agent-Data", name="tinystories", split="sft_train")
+pref = load_dataset("mr3haque/SLM-RL-Agent-Data", name="cnn_dailymail", split="preference_train")
+```
+
+### Model repo layout
+
+```
+mr3haque/SLM-RL-Agent
+├── sft/                                # 15 LoRA adapters
+│   ├── pythia-70m/{tinystories,cnn_dailymail,wikitext}/
+│   ├── pythia-160m/…
+│   ├── pythia-410m/…
+│   ├── smollm2-135m/…
+│   └── smollm2-360m/…
+└── ppo/                                # 15 FULL merged models (base + SFT + PPO)
+    ├── pythia-70m/{tinystories,cnn_dailymail,wikitext}/
+    ├── pythia-160m/…
+    ├── pythia-410m/…
+    ├── smollm2-135m/…
+    └── smollm2-360m/…
+```
+
+### Load an SFT LoRA adapter
+
+```python
+from huggingface_hub import snapshot_download
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
-base = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM2-360M")
-tok  = AutoTokenizer.from_pretrained("mr3haque/slm-rl-smollm2-360m-sft-wikitext")
-model = PeftModel.from_pretrained(base, "mr3haque/slm-rl-smollm2-360m-sft-wikitext")
+model_key, dataset = "smollm2-360m", "wikitext"
+root = snapshot_download(
+    repo_id="mr3haque/SLM-RL-Agent",
+    allow_patterns=f"sft/{model_key}/{dataset}/**",
+)
+adapter_path = f"{root}/sft/{model_key}/{dataset}"
+
+base  = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM2-360M")
+tok   = AutoTokenizer.from_pretrained(adapter_path)
+model = PeftModel.from_pretrained(base, adapter_path).merge_and_unload()
 ```
 
-### Loading a PPO model (single-line, merged)
+### Load a PPO model (already merged, no PEFT needed)
 
 ```python
+from huggingface_hub import snapshot_download
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-tok   = AutoTokenizer.from_pretrained("mr3haque/slm-rl-smollm2-360m-ppo-wikitext")
-model = AutoModelForCausalLM.from_pretrained("mr3haque/slm-rl-smollm2-360m-ppo-wikitext")
+model_key, dataset = "smollm2-360m", "wikitext"
+root = snapshot_download(
+    repo_id="mr3haque/SLM-RL-Agent",
+    allow_patterns=f"ppo/{model_key}/{dataset}/**",
+)
+ppo_path = f"{root}/ppo/{model_key}/{dataset}"
+
+tok   = AutoTokenizer.from_pretrained(ppo_path)
+model = AutoModelForCausalLM.from_pretrained(ppo_path)
 ```
 
 ---
