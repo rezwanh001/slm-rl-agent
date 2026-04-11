@@ -3,6 +3,7 @@
 # =============================================================================
 
 # Paper build artifacts only
+paper/*
 paper/*.aux
 paper/*.bbl
 paper/*.blg
