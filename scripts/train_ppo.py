@@ -31,10 +31,52 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import torch
 from datasets import load_dataset, Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import (
+    AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig,
+    LogitsProcessor, LogitsProcessorList,
+)
 from trl import PPOConfig, PPOTrainer, AutoModelForCausalLMWithValueHead
 from trl.core import LengthSampler
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+
+
+class StableLogitsProcessor(LogitsProcessor):
+    """Clamp logits to prevent inf/nan in softmax → avoids CUDA device-side assert.
+
+    Without this, aggressive PPO updates can push LoRA weights so far that
+    the model produces extreme logits. After softmax these become inf/nan
+    probabilities, triggering an unrecoverable CUDA assert during sampling.
+    """
+
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+        scores = torch.clamp(scores, min=-100.0, max=100.0)
+        scores = torch.nan_to_num(scores, nan=0.0, posinf=100.0, neginf=-100.0)
+        return scores
+
+
+def check_model_health(model) -> bool:
+    """Return False if any model parameter contains NaN or Inf."""
+    for name, param in model.named_parameters():
+        if param.requires_grad and (torch.isnan(param).any() or torch.isinf(param).any()):
+            logger.warning(f"Corrupted parameter detected: {name}")
+            return False
+    return True
+
+
+def save_state_backup(model) -> dict:
+    """Save a copy of all trainable parameter tensors."""
+    return {
+        name: param.data.clone()
+        for name, param in model.named_parameters()
+        if param.requires_grad
+    }
+
+
+def restore_state_backup(model, backup: dict):
+    """Restore trainable parameters from a backup."""
+    for name, param in model.named_parameters():
+        if name in backup:
+            param.data.copy_(backup[name])
 
 logging.basicConfig(
     level=logging.INFO,
@@ -319,7 +361,7 @@ def main():
     # Load prompts
     prompts = load_prompts(args.dataset_path, args.max_prompts)
     
-    # PPO configuration
+    # PPO configuration — reward whitening + adaptive KL for stability
     ppo_config = PPOConfig(
         model_name=args.policy_model,
         learning_rate=args.learning_rate,
@@ -327,15 +369,21 @@ def main():
         mini_batch_size=args.mini_batch_size,
         ppo_epochs=args.num_ppo_epochs,
         init_kl_coef=args.kl_penalty,
+        adap_kl_ctrl=True,            # adaptive KL controller
         target_kl=args.target_kl,
         cliprange=args.clip_range,
+        cliprange_value=args.clip_range,
         gamma=args.gamma,
         lam=args.gae_lambda,
         log_with="tensorboard",
         project_kwargs={"logging_dir": os.path.join(args.output_dir, "logs")},
         seed=args.seed,
-        max_grad_norm=0.5,  # Aggressive gradient clipping for stability
-        ratio_threshold=10.0,
+        max_grad_norm=0.5,
+        ratio_threshold=5.0,          # tighter threshold: skip batches > 5x
+        use_score_scaling=True,       # whiten reward scores
+        use_score_norm=True,          # normalize to unit variance
+        score_clip=3.0,               # clip reward z-scores to ±3
+        whiten_rewards=True,          # GAE reward whitening
     )
     
     # Create PPO trainer
@@ -357,17 +405,19 @@ def main():
     
     # Training loop
     logger.info("Starting PPO training...")
-    
+
+    best_reward = float("-inf")
+    last_healthy_backup = save_state_backup(model)
+    rollback_count = 0
+    max_rollbacks = 5  # stop if model keeps corrupting
+
     for step in range(args.num_steps):
-        # Sample a batch of prompts
+        # ── 1. Sample & tokenize prompts ─────────────────────────────────
         batch_start = (step * args.batch_size) % len(prompts)
         batch_prompts = prompts[batch_start:batch_start + args.batch_size]
-        
-        # Pad batch if needed
         while len(batch_prompts) < args.batch_size:
             batch_prompts.extend(prompts[:args.batch_size - len(batch_prompts)])
-        
-        # Tokenize prompts
+
         prompt_tensors = tokenizer(
             batch_prompts,
             return_tensors="pt",
@@ -376,47 +426,87 @@ def main():
             max_length=256,
         )
         query_tensors = [prompt_tensors["input_ids"][i] for i in range(len(batch_prompts))]
-        
-        # Generate responses
-        response_tensors = ppo_trainer.generate(
-            query_tensors,
-            **generation_kwargs,
-        )
-        
-        # Decode responses
+
+        # ── 2. Generate responses (logits are clamped by StableLogitsProcessor) ──
+        response_tensors = ppo_trainer.generate(query_tensors, **generation_kwargs)
+
+        # ── 3. Decode & compute rewards ──────────────────────────────────
         responses = [
             tokenizer.decode(r[len(q):], skip_special_tokens=True)
             for q, r in zip(query_tensors, response_tensors)
         ]
-        
-        # Compute rewards
         rewards = reward_fn(batch_prompts, responses)
-        
-        # PPO update
+
+        # Sanitize rewards: replace NaN/inf with 0
+        sanitized = False
+        for i in range(len(rewards)):
+            if torch.isnan(rewards[i]) or torch.isinf(rewards[i]):
+                rewards[i] = torch.tensor(0.0)
+                sanitized = True
+        if sanitized:
+            logger.warning(f"Step {step}: some rewards were NaN/inf — replaced with 0.")
+
+        # ── 4. Backup weights before PPO step ────────────────────────────
+        pre_step_backup = save_state_backup(model)
+
+        # ── 5. PPO update ────────────────────────────────────────────────
         stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
-        
-        # Logging
+
+        # ── 6. Post-step health check — rollback if weights corrupted ────
+        if not check_model_health(model):
+            rollback_count += 1
+            logger.warning(
+                f"Step {step}: weights corrupted after PPO step — "
+                f"rolling back ({rollback_count}/{max_rollbacks})"
+            )
+            restore_state_backup(model, pre_step_backup)
+            if rollback_count >= max_rollbacks:
+                logger.error("Too many rollbacks — stopping PPO with last healthy weights.")
+                break
+            continue
+
+        # Healthy step — update the backup
+        last_healthy_backup = pre_step_backup
+
+        # ── 7. Logging ───────────────────────────────────────────────────
+        mean_reward = sum(r.item() for r in rewards) / len(rewards)
+        if mean_reward > best_reward:
+            best_reward = mean_reward
+
+        kl = stats.get("objective/kl", 0)
+
         if step % args.logging_steps == 0:
-            mean_reward = sum(r.item() for r in rewards) / len(rewards)
             logger.info(
                 f"Step {step}/{args.num_steps} | "
                 f"Reward: {mean_reward:.4f} | "
-                f"KL: {stats.get('objective/kl', 0):.4f}"
+                f"KL: {kl:.4f} | "
+                f"Best: {best_reward:.4f}"
             )
-        
-        # Save checkpoint
+
+        # Early stop if KL diverges badly
+        if isinstance(kl, (int, float)) and kl < -50:
+            logger.warning(f"KL diverged to {kl:.1f} — stopping early.")
+            break
+
+        # ── 8. Save checkpoint ───────────────────────────────────────────
         if step > 0 and step % args.save_steps == 0:
             checkpoint_dir = os.path.join(args.output_dir, f"checkpoint-{step}")
             ppo_trainer.save_pretrained(checkpoint_dir)
             logger.info(f"Saved checkpoint to {checkpoint_dir}")
-    
+
+    # Ensure weights are healthy before saving; if not, restore last good backup
+    if not check_model_health(model):
+        logger.warning("Final weights are corrupted — restoring last healthy backup before saving.")
+        restore_state_backup(model, last_healthy_backup)
+
     # Save final model
     final_dir = os.path.join(args.output_dir, "final")
     ppo_trainer.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
-    
+
     logger.info("PPO training complete!")
     logger.info(f"Model saved to: {final_dir}")
+    logger.info(f"Best mean reward: {best_reward:.4f}")
 
 
 if __name__ == "__main__":

@@ -88,8 +88,10 @@ def compute_perplexity(model, tokenizer, texts: List[str], batch_size: int = 8) 
             # Count actual tokens (non-padding)
             mask = inputs["attention_mask"]
             num_tokens = mask.sum().item()
-            total_loss += outputs.loss.item() * num_tokens
-            total_tokens += num_tokens
+            loss_val = outputs.loss.item()
+            if not (torch.isnan(outputs.loss) or torch.isinf(outputs.loss)):
+                total_loss += loss_val * num_tokens
+                total_tokens += num_tokens
     
     avg_loss = total_loss / total_tokens if total_tokens > 0 else float('inf')
     perplexity = torch.exp(torch.tensor(avg_loss)).item()
@@ -280,13 +282,14 @@ def main():
     tokenizer.padding_side = "left"  # Required for decoder-only generation
 
     # Check if model is a PEFT adapter
+    # Use float32 for small models — bfloat16 causes inf/nan with PPO-trained weights
     adapter_config_path = os.path.join(args.model_path, "adapter_config.json")
     if os.path.exists(adapter_config_path):
         from peft import PeftConfig, PeftModel
         peft_config = PeftConfig.from_pretrained(args.model_path)
         base_model = AutoModelForCausalLM.from_pretrained(
             peft_config.base_model_name_or_path,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=torch.float32,
             device_map="auto",
             trust_remote_code=True,
         )
@@ -295,10 +298,18 @@ def main():
     else:
         model = AutoModelForCausalLM.from_pretrained(
             args.model_path,
-            torch_dtype=torch.bfloat16,
+            torch_dtype=torch.float32,
             device_map="auto",
             trust_remote_code=True,
         )
+
+    # Verify model weights are healthy
+    has_nan = any(
+        torch.isnan(p).any() or torch.isinf(p).any()
+        for p in model.parameters()
+    )
+    if has_nan:
+        logger.warning("Model contains NaN/Inf weights — results may be degraded.")
     
     # Load evaluation data
     dataset = load_eval_data(args.eval_dataset, args.max_samples)

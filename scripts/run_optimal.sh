@@ -125,15 +125,15 @@ stage_reward() {
 
 # =============================================================================
 # stage_ppo  <model_key> <dataset> <gpu_id>
-# Optimal settings:
-#   - 1000 steps: 2× previous runs; more RL steps → better policy improvement
-#   - batch 32, mini_batch 8: stable PPO updates
-#   - num_ppo_epochs 4: standard; 4 gradient steps per rollout batch
-#   - kl_penalty 0.05: lower than before → allows larger policy shift
-#   - target_kl 0.1: early stopping if KL diverges
-#   - lr 1.41e-5: √2 × 1e-5 (common PPO learning rate heuristic)
-#   - max_new_tokens 128: longer generations → richer reward signal
-#   - temperature 0.8: slight randomness for exploration
+# PPO settings — tuned after observing collapse on aggressive hyperparameters:
+#   - 500 steps: sufficient with reward whitening + adaptive KL
+#   - batch 32, mini_batch 4: small mini-batch = more updates per rollout
+#   - num_ppo_epochs 2: 2 gradient passes → stable + efficient
+#   - kl_penalty 0.2: strong KL anchoring prevents reward hacking
+#   - target_kl 6.0: adaptive KL target (TRL default) — don't over-constrain
+#   - lr 5e-6: half the standard LR → safer updates for small models
+#   - max_new_tokens 96: shorter → cleaner reward signal, less drift
+#   - temperature 0.9, top_p 0.95: standard exploration
 # =============================================================================
 stage_ppo() {
   local MODEL=$1 DATASET=$2 GPU=$3
@@ -148,19 +148,19 @@ stage_ppo() {
     --reward_model "$OUT/$MODEL/$DATASET/reward_model/final" \
     --dataset_path "$DATA/$DATASET/sft_train.json" \
     --output_dir "$PPO_DIR" \
-    --num_steps 1000 \
+    --num_steps 500 \
     --batch_size 32 \
-    --mini_batch_size 8 \
-    --num_ppo_epochs 4 \
-    --learning_rate 1.41e-5 \
-    --kl_penalty 0.05 \
-    --target_kl 0.1 \
+    --mini_batch_size 4 \
+    --num_ppo_epochs 2 \
+    --learning_rate 5e-6 \
+    --kl_penalty 0.2 \
+    --target_kl 6.0 \
     --clip_range 0.2 \
     --gamma 1.0 \
     --gae_lambda 0.95 \
-    --max_new_tokens 128 \
-    --temperature 0.8 \
-    --top_p 0.9 \
+    --max_new_tokens 96 \
+    --temperature 0.9 \
+    --top_p 0.95 \
     --lora_r "$LORA" \
     --save_steps 100 \
     --logging_steps 10 \
