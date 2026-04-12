@@ -128,29 +128,74 @@ def _load_causal_lm(spec: str):
 
 
 def _load_reward(model_key: str, dataset: str, use_hf: bool):
+    """Load the Bradley-Terry reward model for (model_key, dataset).
+
+    The reward model is saved as a LoRA adapter (with `score` in
+    `modules_to_save`) on top of the base SLM, with **num_labels=1** — a
+    scalar Bradley-Terry head. Naively calling `AutoModelForSequenceClassification
+    .from_pretrained(adapter_path)` defaults to num_labels=2, so the new
+    `score.weight` is `[2, hidden]` while the adapter saved `[1, hidden]`,
+    and PEFT refuses to load. Fix: read the adapter config, load the base
+    with num_labels=1 explicitly, then attach the adapter via PeftModel.
+    """
     key = f"reward::{model_key}/{dataset}::{use_hf}"
     if key in _model_cache:
         return _model_cache[key]
-    if use_hf:
-        repo = HF_MODEL_REPO
-        sub = f"{model_key}/{dataset}/reward_model"
-        try:
-            rm = AutoModelForSequenceClassification.from_pretrained(
-                repo, subfolder=sub, torch_dtype=torch.float32, device_map="auto",
+
+    from peft import PeftModel  # local import keeps startup fast
+
+    try:
+        if use_hf:
+            # Pull adapter_config.json from the hub to discover base model
+            from huggingface_hub import hf_hub_download
+            sub = f"{model_key}/{dataset}/reward_model"
+            cfg_path = hf_hub_download(
+                repo_id=HF_MODEL_REPO,
+                filename=f"{sub}/adapter_config.json",
             )
-            rtok = AutoTokenizer.from_pretrained(repo, subfolder=sub, trust_remote_code=True)
-        except Exception:
-            return None
-    else:
-        p = OUTPUTS / model_key / dataset / "reward_model" / "final"
-        if not p.exists():
-            return None
-        rm = AutoModelForSequenceClassification.from_pretrained(
-            str(p), torch_dtype=torch.float32, device_map="auto",
-        )
-        rtok = AutoTokenizer.from_pretrained(str(p), trust_remote_code=True)
+            with open(cfg_path) as f:
+                adapter_cfg = json.load(f)
+            base_name = adapter_cfg["base_model_name_or_path"]
+
+            base = AutoModelForSequenceClassification.from_pretrained(
+                base_name,
+                num_labels=1,
+                torch_dtype=torch.float32,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+            rm = PeftModel.from_pretrained(base, HF_MODEL_REPO, subfolder=sub)
+            rtok = AutoTokenizer.from_pretrained(
+                HF_MODEL_REPO, subfolder=sub, trust_remote_code=True
+            )
+        else:
+            p = OUTPUTS / model_key / dataset / "reward_model" / "final"
+            if not p.exists():
+                return None
+            with open(p / "adapter_config.json") as f:
+                adapter_cfg = json.load(f)
+            base_name = adapter_cfg["base_model_name_or_path"]
+
+            base = AutoModelForSequenceClassification.from_pretrained(
+                base_name,
+                num_labels=1,
+                torch_dtype=torch.float32,
+                device_map="auto",
+                trust_remote_code=True,
+            )
+            rm = PeftModel.from_pretrained(base, str(p))
+            rtok = AutoTokenizer.from_pretrained(str(p), trust_remote_code=True)
+    except Exception as e:
+        print(f"[app.py] _load_reward failed for {model_key}/{dataset}: {e}")
+        return None
+
+    # Align pad token with the base model to avoid generation-time warnings
     if rtok.pad_token is None:
         rtok.pad_token = rtok.eos_token
+    try:
+        rm.config.pad_token_id = rtok.pad_token_id
+    except Exception:
+        pass
     rm.eval()
     _model_cache[key] = (rm, rtok)
     return rm, rtok
