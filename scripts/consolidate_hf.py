@@ -558,7 +558,10 @@ checkpoint — no PEFT installation required to load it.
 
 ## Main results — 15 configurations
 
-Evaluated on 500-prompt held-out splits from each domain. Reward comes from the
+Evaluated on the first **200 prompts** of each domain's held-out split
+(`num_samples=200`, matching the raw `outputs/*/eval_*/evaluation_results.json`
+files shipped with the [GitHub repo](https://github.com/rezwanh001/slm-rl-agent)).
+Reward comes from the
 SLM-RL-Agent Bradley–Terry reward model (per-configuration scale). Win rate is
 the analytical probability that a PPO response scores higher than an SFT response
 on the same prompt, Φ(Δ / √(σ²_PPO + σ²_SFT)).

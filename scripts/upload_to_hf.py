@@ -195,7 +195,7 @@ pipeline_tag: text-generation
 Part of [**SLM-RL-Agent**](https://github.com/rezwanh001/slm-rl-agent) —
 a framework for efficient RLHF on Small Language Models (≤410M parameters).
 
-## Results on {dataset} eval split (500 prompts)
+## Results on {dataset} eval split (200 prompts)
 
 | Metric           | Value |
 |------------------|-------|
@@ -285,7 +285,7 @@ with `AutoModelForCausalLM` (no PEFT needed).
 Part of [**SLM-RL-Agent**](https://github.com/rezwanh001/slm-rl-agent) —
 efficient RLHF for Small Language Models (≤410M parameters).
 
-## Results on {dataset} eval split (500 prompts)
+## Results on {dataset} eval split (200 prompts)
 
 | Metric                          | SFT (previous stage) | **PPO (this model)** |
 |---------------------------------|----------------------|----------------------|

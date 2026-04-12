@@ -5,6 +5,11 @@
 # Paper build artifacts only
 paper/*
 paper/*.aux
+
+# Generated figures / visualizations (regenerated from results/all_results.json
+# on demand via scripts/generate_figures.py — not tracked in git).
+figures/
+!scripts/generate_figures.py
 paper/*.bbl
 paper/*.blg
 paper/*.log
