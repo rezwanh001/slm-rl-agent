@@ -510,21 +510,57 @@ def build_demo(use_hf: bool):
 
 
 # ---------------------------------------------------------------------------
+def _find_free_port(start: int, end: int) -> int | None:
+    """Return the first TCP port in [start, end] not already bound locally."""
+    import socket
+    for p in range(start, end + 1):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind(("0.0.0.0", p))
+            except OSError:
+                continue
+            return p
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--share", action="store_true", help="Create a public Gradio link")
-    ap.add_argument("--port", type=int, default=7860)
+    ap.add_argument("--port", type=int, default=7860,
+                    help="Preferred port (will auto-increment if busy)")
+    ap.add_argument("--port_range", type=int, default=20,
+                    help="How many ports to scan upward from --port if the preferred one is in use")
+    ap.add_argument("--host", type=str, default="0.0.0.0",
+                    help="Bind address. 0.0.0.0 = reachable from LAN, 127.0.0.1 = localhost only")
     ap.add_argument("--use_hf", action="store_true",
                     help=f"Load weights from {HF_MODEL_REPO} instead of ./outputs")
     args = ap.parse_args()
+
+    port = _find_free_port(args.port, args.port + args.port_range)
+    if port is None:
+        raise SystemExit(
+            f"[app.py] No free port in {args.port}-{args.port + args.port_range}. "
+            f"Pick another with --port <N> or free one of the busy ones."
+        )
+    if port != args.port:
+        print(f"[app.py] Port {args.port} is in use; falling back to {port}.")
+
+    print(f"[app.py] Launching SLM-RL-Agent verification UI on http://{args.host}:{port}")
+    print(f"[app.py] Weight source: {'HuggingFace hub ({})'.format(HF_MODEL_REPO) if args.use_hf else 'local outputs/'}")
+
     demo = build_demo(use_hf=args.use_hf)
     demo.queue()
-    demo.launch(
-        share=args.share,
-        server_port=args.port,
-        server_name="0.0.0.0",
-        theme=gr.themes.Soft(),
-    )
+    try:
+        demo.launch(
+            share=args.share,
+            server_port=port,
+            server_name=args.host,
+            theme=gr.themes.Soft(),
+            show_error=True,
+        )
+    except KeyboardInterrupt:
+        print("\n[app.py] Shutting down.")
 
 
 if __name__ == "__main__":
