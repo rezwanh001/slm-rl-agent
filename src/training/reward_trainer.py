@@ -1,3 +1,8 @@
+#-*- coding: utf-8 -*-
+"""
+@author: Md Rezwanul Haque
+"""
+
 """
 Reward Model Trainer for SLM-RL-Agent
 

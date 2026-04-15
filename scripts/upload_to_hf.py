@@ -1,4 +1,10 @@
-"""Upload SLM-RL-Agent datasets and models to HuggingFace Hub.
+#-*- coding: utf-8 -*-
+"""
+@author: Md Rezwanul Haque
+"""
+
+"""
+Upload SLM-RL-Agent datasets and models to HuggingFace Hub.
 
 Produces the following repos under the configured HF namespace:
 

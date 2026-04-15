@@ -1,3 +1,8 @@
+#-*- coding: utf-8 -*-
+"""
+@author: Md Rezwanul Haque
+"""
+
 """
 Consolidate SLM-RL-Agent artefacts into exactly TWO Hugging Face repos:
 

@@ -1,4 +1,10 @@
-"""Cross-check results/all_results.json against raw outputs/*/eval_*/evaluation_results.json.
+#-*- coding: utf-8 -*-
+"""
+@author: Md Rezwanul Haque
+"""
+
+"""
+Cross-check results/all_results.json against raw outputs/*/eval_*/evaluation_results.json.
 
 Prints a pass/fail per (model, dataset, stage) and exits non-zero on any mismatch.
 Used as a sanity check to confirm aggregated numbers in the paper and HF model cards

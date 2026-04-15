@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#-*- coding: utf-8 -*-
+"""
+@author: Md Rezwanul Haque
+"""
+
 """
 Dataset Preparation for SLM-RL-Agent Experiments
 
@@ -65,7 +69,7 @@ def prepare_tinystories(output_dir: Path, max_samples: int = 10000, eval_ratio: 
 
     logger.info(f"TinyStories SFT: {len(train_data)} train, {len(eval_data)} eval")
 
-    # Preference data: use pairs of stories as chosen/rejected
+    ## Preference data: use pairs of stories as chosen/rejected
     # We rank by length and coherence heuristic (longer, complete stories = better)
     pref_data = create_preference_pairs(sft_data, dataset_type="tinystories")
 

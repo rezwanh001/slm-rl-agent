@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#-*- coding: utf-8 -*-
+"""
+@author: Md Rezwanul Haque
+"""
+
 """
 Evaluate external SOTA SLM baselines using the same metrics as our models.
 
