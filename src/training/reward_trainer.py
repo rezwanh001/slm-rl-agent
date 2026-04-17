@@ -4,7 +4,7 @@
 """
 
 """
-Reward Model Trainer for SLM-RL-Agent
+Reward Model Trainer for SLM-RL-Agents
 
 This module implements Stage 2 of the RLHF pipeline: Reward Model Training.
 The reward model learns to predict human preferences from comparison data,

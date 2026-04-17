@@ -4,7 +4,7 @@
 """
 
 """
-SLM Model Wrapper for SLM-RL-Agent
+SLM Model Wrapper for SLM-RL-Agents
 
 This module provides a unified interface for loading and configuring Small Language Models
 for training with RLHF. It handles:

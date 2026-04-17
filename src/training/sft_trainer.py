@@ -4,7 +4,7 @@
 """
 
 """
-Supervised Fine-Tuning (SFT) Trainer for SLM-RL-Agent
+Supervised Fine-Tuning (SFT) Trainer for SLM-RL-Agents
 
 This module implements Stage 1 of the RLHF pipeline: Supervised Fine-Tuning.
 SFT trains the base language model to follow instructions using demonstration data,

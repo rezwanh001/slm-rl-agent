@@ -4,7 +4,7 @@
 """
 
 """
-Inference Server for SLM-RL-Agent
+Inference Server for SLM-RL-Agents
 
 This module provides a REST API server for deploying trained SLM agents in production.
 The server wraps your trained model and exposes it through HTTP endpoints, making it
@@ -173,7 +173,7 @@ class InferenceServer:
             Configured FastAPI app
         """
         app = FastAPI(
-            title="SLM-RL-Agent Inference Server",
+            title="SLM-RL-Agents Inference Server",
             description="REST API for generating text with trained Small Language Model agents",
             version="1.0.0",
         )
@@ -399,7 +399,7 @@ def main():
     """Command-line entry point for the inference server."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="SLM-RL-Agent Inference Server")
+    parser = argparse.ArgumentParser(description="SLM-RL-Agents Inference Server")
     parser.add_argument(
         "--model_path",
         type=str,

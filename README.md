@@ -1,9 +1,9 @@
-# Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement
+# Towards Robust Reinforcement Learning for Small-Scale Language Model Agents
 
 <p align="center">
   <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg" alt="arXiv"></a>
   <a href="https://huggingface.co/mr3haque"><img src="https://img.shields.io/badge/🤗%20HuggingFace-mr3haque-yellow" alt="HuggingFace"></a>
-  <a href="https://github.com/rezwanh001/slm-rl-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
+  <a href="https://github.com/rezwanh001/slm-rl-agents/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python"></a>
   <a href="https://pytorch.org/"><img src="https://img.shields.io/badge/PyTorch-2.5%2B-EE4C2C.svg" alt="PyTorch"></a>
 </p>
@@ -12,7 +12,7 @@
 
 ## Abstract
 
-We study whether Reinforcement Learning from Human Feedback (RLHF) can meaningfully improve **small language models (SLMs)** with as few as **70M parameters** while consuming orders of magnitude less compute than standard LLM alignment pipelines. Our framework implements a complete three-stage pipeline—supervised fine-tuning (SFT), reward model training, and Proximal Policy Optimization (PPO)—applied to **five model architectures** drawn from two families (Pythia-70M/160M/410M and SmolLM2-135M/360M) across **three diverse text corpora** (TinyStories, CNN/DailyMail, Wikitext-103) for a total of 15 fully-trained configurations. We additionally benchmark our RLHF checkpoints against three publicly released instruct-tuned SLMs—SmolLM2-135M-Instruct, SmolLM2-360M-Instruct, and Qwen2.5-0.5B-Instruct—and show that a 1.5-hour domain-specific SFT+PPO run on a single RTX A6000 can match or beat instruct baselines produced with 1,000× more compute on perplexity and domain-specific reward metrics. Beyond reporting empirical results, we document and resolve **three** engineering obstacles unique to the SLM scale: (1) TRL's PPO trainer silently freezes LoRA parameters when the policy is a PEFT adapter; (2) bfloat16 causes PPO ratio explosions in very small models; and (3) unbounded reward magnitudes cause catastrophic collapse. We introduce a *merge-and-reinitialize* strategy, float32 training, reward whitening with score clipping, and a *weight-rollback* safeguard as the remedies. All model weights, preference datasets, training code, and an interactive demo are publicly available.
+Reinforcement Learning from Human Feedback (RLHF) is widely used for large-scale language models, yet its application to **small language models (SLMs)** in the **70–500M parameter** range remains under-explored. It is commonly assumed that Proximal Policy Optimization (PPO) is inherently unstable at this scale. This work tests that assumption through a systematic empirical investigation. An end-to-end pipeline—supervised fine-tuning, Bradley–Terry reward modelling, and PPO—is applied uniformly to **five SLMs** from two architecture families (Pythia-70M/160M/410M and SmolLM2-135M/360M) across **three diverse corpora** (TinyStories, CNN/DailyMail, Wikitext-103), producing **15 fully trained configurations**. Three critical engineering instabilities specific to the small-scale regime are identified and resolved: silent LoRA parameter freezing, bfloat16 numerical overflows, and catastrophic policy collapse. The results reveal the **capacity-headroom hypothesis**: PPO effectiveness is determined by the joint availability of a fluent SFT prior and a discriminating reward signal rather than raw parameter count. The proposed pipeline achieves performance comparable to or better than released instruction-tuned baselines while requiring several orders of magnitude less training data. All model checkpoints, datasets, and training scripts are publicly released.
 
 ---
 
@@ -21,6 +21,7 @@ We study whether Reinforcement Learning from Human Feedback (RLHF) can meaningfu
 - [Overview](#overview)
 - [Key Contributions](#key-contributions)
 - [Results](#results)
+- [Computation Cost](#computation-cost)
 - [Models & Datasets](#models--datasets)
 - [Installation](#installation)
 - [Usage](#usage)
@@ -38,28 +39,59 @@ We study whether Reinforcement Learning from Human Feedback (RLHF) can meaningfu
 
 ## Overview
 
-This repository provides the complete implementation for the paper **"Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement"**. We investigate whether RLHF—the dominant alignment paradigm for large language models—transfers effectively to the sub-500M parameter regime.
+This repository provides the complete implementation for the paper **"Towards Robust Reinforcement Learning for Small-Scale Language Model Agents"**. We investigate whether RLHF—the dominant alignment paradigm for large language models—transfers effectively to the sub-500M parameter regime.
 
 **Pipeline overview:**
 
 ```
-Pre-trained SLM
-      │
-      ▼
-  Stage 1: Supervised Fine-Tuning (SFT)
-      │  LoRA adapter trained on domain text
-      │
-      ▼
-  Stage 2: Reward Model Training
-      │  Bradley-Terry preference loss on synthetic pairs
-      │
-      ▼
-  Stage 3: PPO Alignment
-         Merge-and-reinitialize strategy (our contribution)
-         Float32 precision for numerical stability
-      │
-      ▼
-  Aligned SLM Agent
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    SLM-RL-Agents: End-to-End Pipeline                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Stage 0: Data Preparation                                              │
+│  ┌──────────────┐   3 corpora (TinyStories, CNN/DailyMail, Wikitext)   │
+│  │  Raw Corpus   ├──► SFT splits (10K train / 200 eval per corpus)     │
+│  │              ├──► Preference pairs (truncation / shuffle / mismatch) │
+│  └──────────────┘                                                       │
+│         │                                                               │
+│         ▼                                                               │
+│  Stage 1: Supervised Fine-Tuning (SFT)                                  │
+│  ┌──────────────┐   LoRA adapter (r ∈ {8,16,32}, α = 2r)              │
+│  │  Base SLM    ├──► + NEFTune noise injection (α=5)                   │
+│  │  (frozen)    │    + AdamW, cosine LR schedule, 5 epochs             │
+│  └──────────────┘──► π_SFT = θ₀ + Δθ_SFT                             │
+│         │                                                               │
+│         ▼                                                               │
+│  Stage 2: Reward Model Training                                         │
+│  ┌──────────────┐   Init from π_SFT backbone                          │
+│  │  Preference  ├──► Bradley-Terry loss: -log σ(r_w - r_l)            │
+│  │  Pairs (p,   │    Scalar head (num_labels=1)                        │
+│  │  y_w, y_l)   │    modules_to_save=[score]                          │
+│  └──────────────┘──► r_φ: (prompt, response) → ℝ                      │
+│         │                                                               │
+│         ▼                                                               │
+│  Stage 3: PPO Alignment (float32 only)                                  │
+│  ┌──────────────┐   ★ Merge-and-reinitialise (Algorithm 1)            │
+│  │ merge_and_   ├──► Fresh LoRA (B=0) on merged weights               │
+│  │ unload()     │    Frozen π_ref for KL penalty                       │
+│  └──────────────┘    ┌──────────────────────────────┐                  │
+│         │            │  Safeguards:                   │                  │
+│         │            │  • Reward whitening + 3σ clip  │                  │
+│         │            │  • Ratio threshold ≤ 5         │                  │
+│         │            │  • NaN/Inf weight rollback     │                  │
+│         │            └──────────────────────────────┘                  │
+│         ▼                                                               │
+│  Stage 4: Evaluation                                                    │
+│  ┌──────────────┐   PPL / Reward / Δ / Win Rate                       │
+│  │  200 held-out├──► Distinct-1/2, ROUGE, BLEU                        │
+│  │  prompts     │    + SOTA baseline comparison                        │
+│  └──────────────┘                                                       │
+│         │                                                               │
+│         ▼                                                               │
+│  ┌──────────────────────────────────────┐                               │
+│  │  15 SFT + 15 PPO Aligned SLM Agents │                               │
+│  └──────────────────────────────────────┘                               │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -162,19 +194,57 @@ PPO consistently preserves or slightly improves diversity — no repetition coll
 
 ---
 
+## Computation Cost
+
+All experiments were conducted on a single workstation with **2× NVIDIA RTX A6000 (48 GB VRAM each)**, 128 GB RAM, CUDA 12.1. The table below breaks down the wall-clock time and training configuration for each pipeline stage.
+
+### Per-Stage Training Details
+
+| Stage | Epochs / Steps | Learning Rate | Batch Size | Sequence Length | Time per Config |
+|-------|:--------------:|:-------------:|:----------:|:---------------:|:---------------:|
+| **SFT** | 5 epochs | 2×10⁻⁵ | 8 × 4 = 32 (grad accum) | 512 | 20–35 min |
+| **Reward Model** | 2 epochs | 1×10⁻⁵ | 8 × 2 = 16 (grad accum) | 512 | 5–10 min |
+| **PPO** | 250 steps | 5×10⁻⁶ | 32 (rollout) / 4 (mini-batch) | 512 (input) + 96 (gen) | 45–90 min |
+| **Evaluation** | — | — | 200 prompts | 512 + 96 | 3–5 min |
+
+### Per-Model Computation Summary
+
+| Model | Params | LoRA Rank (r) | LoRA α | SFT Time | RM Time | PPO Time | **Total per Config** |
+|-------|:------:|:-------------:|:------:|:--------:|:-------:|:--------:|:--------------------:|
+| Pythia-70M | 70M | 8 | 16 | ~20 min | ~5 min | ~45 min | **~70 min** |
+| Pythia-160M | 162M | 16 | 32 | ~25 min | ~7 min | ~55 min | **~87 min** |
+| Pythia-410M | 405M | 32 | 64 | ~30 min | ~8 min | ~75 min | **~113 min** |
+| SmolLM2-135M | 135M | 16 | 32 | ~25 min | ~7 min | ~55 min | **~87 min** |
+| SmolLM2-360M | 361M | 32 | 64 | ~35 min | ~10 min | ~90 min | **~135 min** |
+
+### Total Pipeline Cost
+
+| Metric | Value |
+|--------|:-----:|
+| Configurations | 5 models × 3 datasets = **15** |
+| Total GPU-hours (SFT + RM + PPO + eval) | **~16 GPU-hours** |
+| Average per configuration | **~1.1 GPU-hours** |
+| Hardware | 2× NVIDIA RTX A6000 (48 GB) |
+| Precision | float32 (PPO), mixed (SFT/RM) |
+| Peak VRAM usage | ~38 GB (Pythia-410M PPO) |
+
+> **Cost comparison:** SmolLM2-360M-Instruct required 1.7T tokens of pre-training + multi-million-example instruction tuning. Our SFT uses **10K examples for 5 epochs**, and PPO runs for **250 steps on 32-sample rollouts** — roughly **3–4 orders of magnitude** less training data than the released baselines.
+
+---
+
 ## Models & Datasets
 
 Everything from this paper lives in exactly **two** Hugging Face repositories:
 
 | Artefact | 🤗 Repo | Contents |
 |---|---|---|
-| **Datasets** | **[`mr3haque/SLM-RL-Agent-Data`](https://huggingface.co/datasets/mr3haque/SLM-RL-Agent-Data)** | 3 preprocessed corpora × 4 splits each (`sft_train`, `sft_eval`, `preference_train`, `preference_eval`) |
-| **Models**   | **[`mr3haque/SLM-RL-Agent`](https://huggingface.co/mr3haque/SLM-RL-Agent)**                  | 15 SFT LoRA adapters **+** 15 fully-merged PPO models, organised under `sft/{model}/{dataset}/` and `ppo/{model}/{dataset}/` |
+| **Datasets** | **[`mr3haque/SLM-RL-Agentss-Data`](https://huggingface.co/datasets/mr3haque/SLM-RL-Agentss-Data)** | 3 preprocessed corpora × 4 splits each (`sft_train`, `sft_eval`, `preference_train`, `preference_eval`) |
+| **Models**   | **[`mr3haque/SLM-RL-Agents`](https://huggingface.co/mr3haque/SLM-RL-Agents)**                  | 15 SFT LoRA adapters **+** 15 fully-merged PPO models, organised under `sft/{model}/{dataset}/` and `ppo/{model}/{dataset}/` |
 
 ### Dataset repo layout
 
 ```
-mr3haque/SLM-RL-Agent-Data
+mr3haque/SLM-RL-Agentss-Data
 └── datasets/
     ├── tinystories/    {sft_train, sft_eval, preference_train, preference_eval}.json
     ├── cnn_dailymail/  same
@@ -186,14 +256,14 @@ Load a specific split via the datasets library:
 ```python
 from datasets import load_dataset
 
-ds = load_dataset("mr3haque/SLM-RL-Agent-Data", name="tinystories", split="sft_train")
-pref = load_dataset("mr3haque/SLM-RL-Agent-Data", name="cnn_dailymail", split="preference_train")
+ds = load_dataset("mr3haque/SLM-RL-Agentss-Data", name="tinystories", split="sft_train")
+pref = load_dataset("mr3haque/SLM-RL-Agentss-Data", name="cnn_dailymail", split="preference_train")
 ```
 
 ### Model repo layout
 
 ```
-mr3haque/SLM-RL-Agent
+mr3haque/SLM-RL-Agents
 ├── sft/                                # 15 LoRA adapters
 │   ├── pythia-70m/{tinystories,cnn_dailymail,wikitext}/
 │   ├── pythia-160m/…
@@ -217,7 +287,7 @@ from peft import PeftModel
 
 model_key, dataset = "smollm2-360m", "wikitext"
 root = snapshot_download(
-    repo_id="mr3haque/SLM-RL-Agent",
+    repo_id="mr3haque/SLM-RL-Agents",
     allow_patterns=f"sft/{model_key}/{dataset}/**",
 )
 adapter_path = f"{root}/sft/{model_key}/{dataset}"
@@ -235,7 +305,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model_key, dataset = "smollm2-360m", "wikitext"
 root = snapshot_download(
-    repo_id="mr3haque/SLM-RL-Agent",
+    repo_id="mr3haque/SLM-RL-Agents",
     allow_patterns=f"ppo/{model_key}/{dataset}/**",
 )
 ppo_path = f"{root}/ppo/{model_key}/{dataset}"
@@ -257,7 +327,7 @@ model = AutoModelForCausalLM.from_pretrained(ppo_path)
 ### Setup
 
 ```bash
-git clone https://github.com/rezwanh001/slm-rl-agent.git
+git clone https://github.com/rezwanh001/slm-rl-agentss.git
 cd slm-rl-agent
 
 # Create conda environment
@@ -441,7 +511,7 @@ slm-rl-agent/
 │
 ├── app.py                        # Gradio interactive demo (side-by-side SFT vs PPO)
 ├── requirements.txt
-├── setup.py / pyproject.toml     # Installable as `slm-rl-agent`
+├── setup.py / pyproject.toml     # Installable as `slm-rl-agents`
 └── README.md                     # You are here
 ```
 
@@ -454,13 +524,13 @@ slm-rl-agent/
 If you find this work useful, please cite:
 
 ```bibtex
-@misc{haque2026slmrlagent,
-  title        = {Efficiently Enhancing {SLM} Agents: A Reinforcement Learning Approach
-                  to Performance Improvement},
-  author       = {Haque, Md Rezwanul},
+@misc{haque2026slmrlagents,
+  title        = {Towards Robust Reinforcement Learning for Small-Scale
+                  Language Model Agents},
+  author       = {Haque, Md Rezwanul and Islam, Md. Milon and Karray, Fakhri},
   year         = {2026},
-  howpublished = {\url{https://github.com/rezwanh001/slm-rl-agent}},
-  note         = {University of Waterloo, CPAMI Lab}
+  howpublished = {\url{https://github.com/rezwanh001/slm-rl-agents}},
+  note         = {University of Waterloo \& KUET \& MBZUAI}
 }
 ```
 
@@ -468,7 +538,10 @@ If you find this work useful, please cite:
 
 ## Acknowledgements
 
-Computational resources were provided by the CPAMI Lab at the University of Waterloo. This work builds on the TRL library by Hugging Face, the PEFT library, and the Pythia model suite by EleutherAI.
+Computational resources were provided by the CPAMI Lab at the University of Waterloo. This work builds on the [TRL](https://github.com/huggingface/trl) library by Hugging Face, the [PEFT](https://github.com/huggingface/peft) library, and the [Pythia](https://github.com/EleutherAI/pythia) model suite by EleutherAI.
+
+<!-- ডকুমেন্টেশন এবং কোড রিভিউ Claude (Anthropic) দ্বারা সহায়তা করা হয়েছে -->
+Documentation and code review were assisted by [Claude](https://claude.ai) (Anthropic). All core research contributions — experimental design, training pipeline implementation, result analysis, and paper writing — are the original work of the authors.
 
 ---
 

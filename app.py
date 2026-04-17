@@ -4,7 +4,7 @@
 """
 
 """
-SLM-RL-Agent — Interactive Verification App (paper appendix)
+SLM-RL-Agents — Interactive Verification App (paper appendix)
 
 This Gradio app accompanies the paper:
 
@@ -39,7 +39,7 @@ Run:
     python app.py                    # local
     python app.py --share            # public gradio link
     python app.py --use_hf           # pull weights from HuggingFace hub
-                                     # (mr3haque/SLM-RL-Agent) instead of
+                                     # (mr3haque/SLM-RL-Agents) instead of
                                      # the local outputs/ directory
 """
 from __future__ import annotations
@@ -62,9 +62,9 @@ ROOT = Path(__file__).resolve().parent
 OUTPUTS = ROOT / "outputs"
 RESULTS_JSON = ROOT / "results" / "all_results.json"
 
-HF_MODEL_REPO = "mr3haque/SLM-RL-Agent"
-HF_DATA_REPO = "mr3haque/SLM-RL-Agent-Data"
-GITHUB_URL = "https://github.com/rezwanh001/slm-rl-agent"
+HF_MODEL_REPO = "mr3haque/SLM-RL-Agents"
+HF_DATA_REPO = "mr3haque/SLM-RL-Agentss-Data"
+GITHUB_URL = "https://github.com/rezwanh001/slm-rl-agents"
 
 MODELS = ["pythia-70m", "pythia-160m", "pythia-410m", "smollm2-135m", "smollm2-360m"]
 DATASETS = ["tinystories", "cnn_dailymail", "wikitext"]
@@ -141,6 +141,16 @@ def _load_reward(model_key: str, dataset: str, use_hf: bool):
     `score.weight` is `[2, hidden]` while the adapter saved `[1, hidden]`,
     and PEFT refuses to load. Fix: read the adapter config, load the base
     with num_labels=1 explicitly, then attach the adapter via PeftModel.
+
+    # --- আগের কোড (পুরাতন পদ্ধতি) — size mismatch error দিতো ---
+    # rm = AutoModelForSequenceClassification.from_pretrained(
+    #     adapter_path,                          # num_labels defaults to 2
+    #     torch_dtype=torch.float32,
+    #     device_map="auto",
+    # )
+    # RuntimeError: size mismatch for score.modules_to_save.default.weight:
+    #   copying param shape [1, 512] from checkpoint, shape in model is [2, 512]
+    # --- সমাধান: adapter_config.json থেকে base model পড়ে num_labels=1 দিয়ে load ---
     """
     key = f"reward::{model_key}/{dataset}::{use_hf}"
     if key in _model_cache:
@@ -466,9 +476,9 @@ python scripts/verify_results.py
 def build_demo(use_hf: bool):
     results = _load_results()
 
-    with gr.Blocks(title="SLM-RL-Agent — Verification") as demo:
+    with gr.Blocks(title="SLM-RL-Agents — Verification") as demo:
         gr.Markdown(
-            "# SLM-RL-Agent — Interactive Verification\n"
+            "# SLM-RL-Agents — Interactive Verification\n"
             "Companion app for *“Efficiently Enhancing SLM Agents: "
             "A Reinforcement Learning Approach to Performance Improvement.”*  \n"
             f"Weights: [{HF_MODEL_REPO}](https://huggingface.co/{HF_MODEL_REPO}) · "
@@ -560,7 +570,13 @@ def build_demo(use_hf: bool):
 
 # ---------------------------------------------------------------------------
 def _find_free_port(start: int, end: int) -> int | None:
-    """Return the first TCP port in [start, end] not already bound locally."""
+    """Return the first TCP port in [start, end] not already bound locally.
+
+    # --- আগে Gradio সরাসরি port=7860 দিয়ে launch করতো ---
+    # demo.launch(server_name=args.host, server_port=args.port)
+    # OSError: Cannot find empty port in range: 7860-7860
+    # --- এখন socket bind দিয়ে free port খুঁজে বের করে launch করা হয় ---
+    """
     import socket
     for p in range(start, end + 1):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -595,7 +611,7 @@ def main():
     if port != args.port:
         print(f"[app.py] Port {args.port} is in use; falling back to {port}.")
 
-    print(f"[app.py] Launching SLM-RL-Agent verification UI on http://{args.host}:{port}")
+    print(f"[app.py] Launching SLM-RL-Agents verification UI on http://{args.host}:{port}")
     print(f"[app.py] Weight source: {'HuggingFace hub ({})'.format(HF_MODEL_REPO) if args.use_hf else 'local outputs/'}")
 
     demo = build_demo(use_hf=args.use_hf)

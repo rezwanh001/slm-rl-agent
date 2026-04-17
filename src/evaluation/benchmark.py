@@ -4,7 +4,7 @@
 """
 
 """
-Benchmark Evaluation for SLM-RL-Agent
+Benchmark Evaluation for SLM-RL-Agents
 
 This module provides tools for evaluating models on standard NLP benchmarks.
 Benchmarks provide standardized comparison points across different models and

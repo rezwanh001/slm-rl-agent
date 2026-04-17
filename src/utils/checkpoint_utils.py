@@ -4,7 +4,7 @@
 """
 
 """
-Checkpoint Utilities for SLM-RL-Agent
+Checkpoint Utilities for SLM-RL-Agents
 
 This module provides utilities for saving and loading model checkpoints during training.
 Proper checkpoint management is crucial for long training runs, enabling recovery from

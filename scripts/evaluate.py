@@ -4,7 +4,7 @@
 """
 
 """
-Evaluation Script for SLM-RL-Agent
+Evaluation Script for SLM-RL-Agents
 
 This script runs comprehensive evaluation on trained models, computing metrics across
 multiple dimensions: language modeling quality, generation quality, reward scores,
@@ -251,7 +251,7 @@ def compute_reward_scores(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate SLM-RL-Agent models")
+    parser = argparse.ArgumentParser(description="Evaluate SLM-RL-Agents models")
     
     parser.add_argument("--model_path", type=str, required=True,
                         help="Path to model to evaluate")

@@ -4,7 +4,7 @@
 """
 
 """
-Group Relative Policy Optimization (GRPO) Trainer for SLM-RL-Agent
+Group Relative Policy Optimization (GRPO) Trainer for SLM-RL-Agents
 
 This module implements GRPO, an advanced alignment technique used in DeepSeek R1.
 GRPO eliminates the need for a separate value network by using group-level statistics

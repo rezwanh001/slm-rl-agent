@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Full RLHF Pipeline Script for SLM-RL-Agent
+# Full RLHF Pipeline Script for SLM-RL-Agents
 # =============================================================================
 # This script runs the complete RLHF training pipeline:
 # 1. Data Preparation
@@ -76,7 +76,7 @@ USE_DPO=false  # Set to true to use DPO instead of PPO
 # =============================================================================
 
 echo "=============================================="
-echo "SLM-RL-Agent Full Pipeline"
+echo "SLM-RL-Agents Full Pipeline"
 echo "=============================================="
 echo "Model: $MODEL_NAME"
 echo "Output: $OUTPUT_DIR"

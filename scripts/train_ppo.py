@@ -4,7 +4,7 @@
 """
 
 """
-PPO Training Script for SLM-RL-Agent
+PPO Training Script for SLM-RL-Agents
 
 This script runs Stage 3 of the RLHF pipeline: Proximal Policy Optimization.
 PPO fine-tunes the policy model to maximize rewards while staying close to
@@ -187,7 +187,7 @@ def create_reward_fn(reward_model_path: str, tokenizer):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="PPO Training for SLM-RL-Agent")
+    parser = argparse.ArgumentParser(description="PPO Training for SLM-RL-Agents")
     
     # Model arguments
     parser.add_argument("--policy_model", type=str, required=True,
@@ -272,11 +272,19 @@ def main():
         from peft import PeftConfig, PeftModel as PeftModelLoader
         peft_cfg = PeftConfig.from_pretrained(args.policy_model)
 
+        # --- পুরাতন পদ্ধতি (সমস্যা: LoRA params সব frozen থাকতো) ---
+        # policy = AutoModelForCausalLMWithValueHead.from_pretrained(
+        #     args.policy_model,  # PEFT adapter সরাসরি PPOTrainer-এ দিলে
+        #     ...                 # requires_grad=False হয়ে যায়, gradient flow হয় না
+        # )
+        # --- সমাধান: merge_and_unload() করে নতুন LoRA লাগানো (Algorithm 1) ---
+
         # Merge PEFT adapter into base to get a full model
         base_model = AutoModelForCausalLM.from_pretrained(
             peft_cfg.base_model_name_or_path,
             trust_remote_code=True,
-            torch_dtype=torch.float32,  # float32 for PPO stability
+            # bfloat16 ব্যবহার করলে ratio > 10^6 হয়ে CUDA crash করে (200M এর নিচে)
+            torch_dtype=torch.float32,  # float32 is mandatory for sub-200M PPO stability
         )
         peft_model = PeftModelLoader.from_pretrained(base_model, args.policy_model)
         merged_model = peft_model.merge_and_unload()

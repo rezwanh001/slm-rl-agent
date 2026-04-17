@@ -4,7 +4,7 @@
 @author: Md Rezwanul Haque
 """
 """
-Setup file for SLM-RL-Agent package.
+Setup file for SLM-RL-Agents package.
 
 This package provides a comprehensive framework for training Small Language Model (SLM)
 AI Agents using Reinforcement Learning from Human Feedback (RLHF).
@@ -94,7 +94,7 @@ ALL_REQUIRES = (
 setup(
     name="slm-rl-agent",
     version="1.0.0",
-    author="SLM-RL-Agent Team",
+    author="SLM-RL-Agents Team",
     author_email="",
     description="Efficient Small Language Model Agents with Reinforcement Learning",
     long_description=long_description,

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# Master Experiment Runner for SLM-RL-Agent
+# Master Experiment Runner for SLM-RL-Agents
 # Runs the full RLHF pipeline (SFT → Reward Model → PPO → Evaluation)
 # for all model x dataset combinations.
 #
@@ -97,7 +97,7 @@ conda activate ${CONDA_ENV}
 mkdir -p "${LOG_DIR}" "${RESULTS_DIR}"
 
 echo "============================================================"
-echo "SLM-RL-Agent: Full Experiment Pipeline"
+echo "SLM-RL-Agents: Full Experiment Pipeline"
 echo "============================================================"
 echo "Models:   ${MODELS}"
 echo "Datasets: ${DATASETS}"

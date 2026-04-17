@@ -1,5 +1,5 @@
 """
-Evaluation Metrics for SLM-RL-Agent
+Evaluation Metrics for SLM-RL-Agents
 
 This module provides comprehensive evaluation tools for measuring model quality
 across all stages of RLHF training. Metrics include:

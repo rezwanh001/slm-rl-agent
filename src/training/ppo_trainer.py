@@ -4,7 +4,7 @@
 """
 
 """
-PPO Trainer for SLM-RL-Agent
+PPO Trainer for SLM-RL-Agents
 
 This module implements Stage 3 of the RLHF pipeline: Policy Optimization with PPO.
 Proximal Policy Optimization fine-tunes the SFT model using rewards from the learned

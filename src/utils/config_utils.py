@@ -4,7 +4,7 @@
 """
 
 """
-Configuration Utilities for SLM-RL-Agent
+Configuration Utilities for SLM-RL-Agents
 
 This module provides utilities for loading, saving, and managing configuration files.
 Configuration management is essential for reproducible experiments and easy hyperparameter tuning.

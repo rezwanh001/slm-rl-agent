@@ -4,7 +4,7 @@
 """
 
 """
-Upload SLM-RL-Agent datasets and models to HuggingFace Hub.
+Upload SLM-RL-Agents datasets and models to HuggingFace Hub.
 
 Produces the following repos under the configured HF namespace:
 
@@ -83,7 +83,7 @@ task_categories:
   - text-generation
 language:
   - en
-pretty_name: SLM-RL-Agent — {dataset_key.replace('_', '/').title()} RLHF split
+pretty_name: SLM-RL-Agents — {dataset_key.replace('_', '/').title()} RLHF split
 tags:
   - rlhf
   - reward-modeling
@@ -94,10 +94,10 @@ size_categories:
   - 10K<n<100K
 ---
 
-# SLM-RL-Agent: {dataset_key.replace('_', '/').title()} RLHF split
+# SLM-RL-Agents: {dataset_key.replace('_', '/').title()} RLHF split
 
 This dataset is a preprocessed slice of **{info['source']}** ({info['domain']}) prepared for the
-[SLM-RL-Agent](https://github.com/rezwanh001/slm-rl-agent) framework. It is used to
+[SLM-RL-Agents](https://github.com/rezwanh001/slm-rl-agents) framework. It is used to
 (1) supervised-finetune small language models (SFT), (2) train a Bradley–Terry reward
 model on preference pairs, and (3) further improve the SFT policy with PPO.
 
@@ -105,7 +105,7 @@ model on preference pairs, and (3) further improve the SFT policy with PPO.
 
 > *Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement*
 >
-> Code: https://github.com/rezwanh001/slm-rl-agent
+> Code: https://github.com/rezwanh001/slm-rl-agents
 
 ## Splits
 
@@ -128,8 +128,8 @@ model on preference pairs, and (3) further improve the SFT policy with PPO.
 - `rejected` (str) — lower-quality continuation
 
 Preference pairs are synthesised by ranking completions from candidate SLMs with a
-length/coherence heuristic, following the SLM-RL-Agent data pipeline in
-[`scripts/prepare_all_datasets.py`](https://github.com/rezwanh001/slm-rl-agent/blob/main/scripts/prepare_all_datasets.py).
+length/coherence heuristic, following the SLM-RL-Agents data pipeline in
+[`scripts/prepare_all_datasets.py`](https://github.com/rezwanh001/slm-rl-agents/blob/main/scripts/prepare_all_datasets.py).
 
 ## Usage
 
@@ -147,7 +147,7 @@ print(ds)
   title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
   author = {{Haque, Md. Rezwanul and collaborators}},
   year   = {{2026}},
-  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agent}}}}
+  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}}
 }}
 ```
 
@@ -194,11 +194,11 @@ library_name: peft
 pipeline_tag: text-generation
 ---
 
-# {m['family']} {m['params_m']}M — SFT on {dataset} (SLM-RL-Agent)
+# {m['family']} {m['params_m']}M — SFT on {dataset} (SLM-RL-Agents)
 
 **Stage:** Supervised fine-tuning (SFT). LoRA adapter on top of `{m['hf_base']}`.
 
-Part of [**SLM-RL-Agent**](https://github.com/rezwanh001/slm-rl-agent) —
+Part of [**SLM-RL-Agents**](https://github.com/rezwanh001/slm-rl-agents) —
 a framework for efficient RLHF on Small Language Models (≤410M parameters).
 
 ## Results on {dataset} eval split (200 prompts)
@@ -214,7 +214,7 @@ a framework for efficient RLHF on Small Language Models (≤410M parameters).
 | ROUGE-L F1       | {fmt_row(rd,'sft_rougeL')} |
 | BLEU-4           | {fmt_row(rd,'sft_bleu4')} |
 
-Reward mean is computed by the SLM-RL-Agent reward model trained on the same preference split.
+Reward mean is computed by the SLM-RL-Agents reward model trained on the same preference split.
 
 ## Training configuration
 
@@ -253,7 +253,7 @@ print(tok.decode(out[0], skip_special_tokens=True))
   title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
   author = {{Haque, Md. Rezwanul and collaborators}},
   year   = {{2026}},
-  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agent}}}}
+  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}}
 }}
 ```
 """
@@ -282,13 +282,13 @@ datasets:
 pipeline_tag: text-generation
 ---
 
-# {m['family']} {m['params_m']}M — PPO (RLHF) on {dataset} (SLM-RL-Agent)
+# {m['family']} {m['params_m']}M — PPO (RLHF) on {dataset} (SLM-RL-Agents)
 
 **Stage:** PPO / RLHF. Full merged model — SFT LoRA and PPO LoRA have been merged
 back into the base weights of `{m['hf_base']}`, so this repo can be loaded directly
 with `AutoModelForCausalLM` (no PEFT needed).
 
-Part of [**SLM-RL-Agent**](https://github.com/rezwanh001/slm-rl-agent) —
+Part of [**SLM-RL-Agents**](https://github.com/rezwanh001/slm-rl-agents) —
 efficient RLHF for Small Language Models (≤410M parameters).
 
 ## Results on {dataset} eval split (200 prompts)
@@ -301,7 +301,7 @@ efficient RLHF for Small Language Models (≤410M parameters).
 | Distinct-2                      | {fmt_row(rd,'sft_distinct2')} | {fmt_row(rd,'ppo_distinct2')} |
 | ROUGE-L F1                      | {fmt_row(rd,'sft_rougeL')} | {fmt_row(rd,'ppo_rougeL')} |
 
-Reward is given by the SLM-RL-Agent reward model (Bradley–Terry) trained on this dataset's
+Reward is given by the SLM-RL-Agents reward model (Bradley–Terry) trained on this dataset's
 preference split.
 
 ## Training pipeline
@@ -332,7 +332,7 @@ print(tok.decode(out[0], skip_special_tokens=True))
 
 - Dataset: [`{namespace}/{ds_info['hf_slug']}`](https://huggingface.co/datasets/{namespace}/{ds_info['hf_slug']})
 - SFT checkpoint (previous stage): [`{namespace}/slm-rl-{model_key}-sft-{dataset}`](https://huggingface.co/{namespace}/slm-rl-{model_key}-sft-{dataset})
-- Code & paper: https://github.com/rezwanh001/slm-rl-agent
+- Code & paper: https://github.com/rezwanh001/slm-rl-agents
 
 ## Citation
 
@@ -341,7 +341,7 @@ print(tok.decode(out[0], skip_special_tokens=True))
   title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
   author = {{Haque, Md. Rezwanul and collaborators}},
   year   = {{2026}},
-  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agent}}}}
+  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}}
 }}
 ```
 """

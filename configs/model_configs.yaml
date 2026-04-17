@@ -1,4 +1,4 @@
-# Model Configurations for SLM-RL-Agent
+# Model Configurations for SLM-RL-Agents
 # This file defines all model-related settings including architecture, LoRA, and quantization
 
 # ============================================

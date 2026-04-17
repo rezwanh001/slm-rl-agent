@@ -4,19 +4,19 @@
 """
 
 """
-Consolidate SLM-RL-Agent artefacts into exactly TWO Hugging Face repos:
+Consolidate SLM-RL-Agents artefacts into exactly TWO Hugging Face repos:
 
-    mr3haque/SLM-RL-Agent-Data   (dataset)
-    mr3haque/SLM-RL-Agent        (model)
+    mr3haque/SLM-RL-Agentss-Data   (dataset)
+    mr3haque/SLM-RL-Agents        (model)
 
 Actions (run individually with --stage):
 
-    1. rename-data      Rename existing  mr3haque/SLM-RL-Agent (dataset)
-                        to mr3haque/SLM-RL-Agent-Data.  Preserves downloads.
+    1. rename-data      Rename existing  mr3haque/SLM-RL-Agents (dataset)
+                        to mr3haque/SLM-RL-Agentss-Data.  Preserves downloads.
     2. clean-data       Wipe stale models/* from inside the data repo.
     3. upload-data      Upload 3 preprocessed datasets + polished README
-                        with result tables into SLM-RL-Agent-Data.
-    4. create-model     Create mr3haque/SLM-RL-Agent model repo.
+                        with result tables into SLM-RL-Agentss-Data.
+    4. create-model     Create mr3haque/SLM-RL-Agents model repo.
     5. stage-model      Merge 15 PPO checkpoints into full models and
                         build the full staging tree on disk.
     6. upload-model     Upload staged model tree + polished README with
@@ -46,9 +46,9 @@ DATA = ROOT / "data"
 RESULTS = ROOT / "results" / "all_results.json"
 
 NAMESPACE = "mr3haque"
-OLD_DATA_REPO = f"{NAMESPACE}/SLM-RL-Agent"           # current dataset repo
-NEW_DATA_REPO = f"{NAMESPACE}/SLM-RL-Agent-Data"      # renamed dataset repo
-MODEL_REPO    = f"{NAMESPACE}/SLM-RL-Agent"           # new model repo
+OLD_DATA_REPO = f"{NAMESPACE}/SLM-RL-Agents"           # current dataset repo
+NEW_DATA_REPO = f"{NAMESPACE}/SLM-RL-Agentss-Data"      # renamed dataset repo
+MODEL_REPO    = f"{NAMESPACE}/SLM-RL-Agents"           # new model repo
 
 STAGE_ROOT = Path("/tmp/slm-rl-agent-staging")
 STAGE_DATA  = STAGE_ROOT / "data"
@@ -123,7 +123,7 @@ def stage_clean_data(api: HfApi) -> None:
         path_in_repo="models",
         repo_id=NEW_DATA_REPO,
         repo_type="dataset",
-        commit_message="Remove stale models/ tree (models now live in mr3haque/SLM-RL-Agent)",
+        commit_message="Remove stale models/ tree (models now live in mr3haque/SLM-RL-Agents)",
     )
     print("[clean-data] done")
 
@@ -163,7 +163,7 @@ task_categories:
   - summarization
 language:
   - en
-pretty_name: SLM-RL-Agent Data — RLHF Splits for Small Language Models
+pretty_name: SLM-RL-Agents Data — RLHF Splits for Small Language Models
 tags:
   - rlhf
   - reward-modeling
@@ -206,18 +206,18 @@ configs:
         path: datasets/wikitext/preference_eval.json
 ---
 
-# SLM-RL-Agent-Data
+# SLM-RL-Agentss-Data
 
 **Companion datasets for the paper *Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement*.**
 
 | | |
 |---|---|
-| **Code**        | [github.com/rezwanh001/slm-rl-agent](https://github.com/rezwanh001/slm-rl-agent) |
-| **Trained models** | [`mr3haque/SLM-RL-Agent`](https://huggingface.co/mr3haque/SLM-RL-Agent) |
+| **Code**        | [github.com/rezwanh001/slm-rl-agents](https://github.com/rezwanh001/slm-rl-agents) |
+| **Trained models** | [`mr3haque/SLM-RL-Agents`](https://huggingface.co/mr3haque/SLM-RL-Agents) |
 | **License**     | Apache-2.0 (this processing); upstream corpora retain their own licenses |
 
 This repository bundles the three preprocessed text corpora used to train the entire
-SLM-RL-Agent framework — a complete three-stage RLHF pipeline (SFT → reward model → PPO)
+SLM-RL-Agents framework — a complete three-stage RLHF pipeline (SFT → reward model → PPO)
 applied to small language models in the **70M–410M parameter range**. Each corpus is
 provided both as a **supervised fine-tuning** split (`sft_train`, `sft_eval`) and a
 **preference-pair** split (`preference_train`, `preference_eval`) for Bradley–Terry
@@ -233,7 +233,7 @@ All splits have been deduplicated, prompt-normalized, and truncated to a uniform
 `prompt + response ≤ 512 tokens` budget. Preference pairs are synthesised by
 ranking completions from candidate SLMs with a length/coherence heuristic;
 the exact pipeline is reproducible via
-[`scripts/prepare_all_datasets.py`](https://github.com/rezwanh001/slm-rl-agent/blob/main/scripts/prepare_all_datasets.py).
+[`scripts/prepare_all_datasets.py`](https://github.com/rezwanh001/slm-rl-agents/blob/main/scripts/prepare_all_datasets.py).
 
 ---
 
@@ -243,18 +243,18 @@ the exact pipeline is reproducible via
 from datasets import load_dataset
 
 # Load TinyStories SFT split
-ds = load_dataset("mr3haque/SLM-RL-Agent-Data", name="tinystories", split="sft_train")
+ds = load_dataset("mr3haque/SLM-RL-Agentss-Data", name="tinystories", split="sft_train")
 print(ds[0])
 
 # Load CNN/DailyMail preference pairs
-pref = load_dataset("mr3haque/SLM-RL-Agent-Data", name="cnn_dailymail", split="preference_train")
+pref = load_dataset("mr3haque/SLM-RL-Agentss-Data", name="cnn_dailymail", split="preference_train")
 print(pref[0]["prompt"], "|", pref[0]["chosen"])
 ```
 
 Or clone the raw JSON files directly:
 
 ```bash
-huggingface-cli download mr3haque/SLM-RL-Agent-Data \\
+huggingface-cli download mr3haque/SLM-RL-Agentss-Data \\
     --repo-type dataset --local-dir ./slm-rl-data
 ```
 
@@ -292,7 +292,7 @@ preference split and then used to PPO-align the corresponding SFT checkpoint.
 | Evaluation     | `sft_eval` | Perplexity, reward mean/std, ROUGE, BLEU, Distinct-n |
 
 All 30 trained checkpoints (15 SFT + 15 PPO) are published in the companion repo
-[`mr3haque/SLM-RL-Agent`](https://huggingface.co/mr3haque/SLM-RL-Agent).
+[`mr3haque/SLM-RL-Agents`](https://huggingface.co/mr3haque/SLM-RL-Agents).
 
 ---
 
@@ -303,7 +303,7 @@ All 30 trained checkpoints (15 SFT + 15 PPO) are published in the companion repo
   title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
   author = {{Haque, Md. Rezwanul}},
   year   = {{2026}},
-  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agent}}}},
+  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}},
   note   = {{University of Waterloo, CPAMI Lab}}
 }}
 ```
@@ -511,22 +511,22 @@ base_model:
   - HuggingFaceTB/SmolLM2-135M
   - HuggingFaceTB/SmolLM2-360M
 datasets:
-  - mr3haque/SLM-RL-Agent-Data
+  - mr3haque/SLM-RL-Agentss-Data
 ---
 
-# SLM-RL-Agent — Models
+# SLM-RL-Agents — Models
 
 **Companion model repository for the paper *Efficiently Enhancing SLM Agents:
 A Reinforcement Learning Approach to Performance Improvement*.**
 
 | | |
 |---|---|
-| **Code** | [github.com/rezwanh001/slm-rl-agent](https://github.com/rezwanh001/slm-rl-agent) |
-| **Datasets** | [`mr3haque/SLM-RL-Agent-Data`](https://huggingface.co/datasets/mr3haque/SLM-RL-Agent-Data) |
+| **Code** | [github.com/rezwanh001/slm-rl-agents](https://github.com/rezwanh001/slm-rl-agents) |
+| **Datasets** | [`mr3haque/SLM-RL-Agentss-Data`](https://huggingface.co/datasets/mr3haque/SLM-RL-Agentss-Data) |
 | **License** | Apache-2.0 |
 | **Hardware** | 1 × NVIDIA RTX A6000 (48 GB) |
 
-This single repository hosts **all 30 trained checkpoints** from the SLM-RL-Agent
+This single repository hosts **all 30 trained checkpoints** from the SLM-RL-Agents
 framework — 15 supervised-fine-tuned (SFT) small language models and 15 PPO-aligned
 (RLHF) small language models — spanning **5 architectures × 3 text corpora**.
 
@@ -535,7 +535,7 @@ framework — 15 supervised-fine-tuned (SFT) small language models and 15 PPO-al
 ## Repository layout
 
 ```
-SLM-RL-Agent/
+SLM-RL-Agents/
 ├── sft/                               # 15 LoRA adapters
 │   ├── pythia-70m/
 │   │   ├── tinystories/               #  (adapter_model.safetensors + tokenizer)
@@ -565,9 +565,9 @@ checkpoint — no PEFT installation required to load it.
 
 Evaluated on the first **200 prompts** of each domain's held-out split
 (`num_samples=200`, matching the raw `outputs/*/eval_*/evaluation_results.json`
-files shipped with the [GitHub repo](https://github.com/rezwanh001/slm-rl-agent)).
+files shipped with the [GitHub repo](https://github.com/rezwanh001/slm-rl-agents)).
 Reward comes from the
-SLM-RL-Agent Bradley–Terry reward model (per-configuration scale). Win rate is
+SLM-RL-Agents Bradley–Terry reward model (per-configuration scale). Win rate is
 the analytical probability that a PPO response scores higher than an SFT response
 on the same prompt, Φ(Δ / √(σ²_PPO + σ²_SFT)).
 
@@ -591,7 +591,7 @@ on the same prompt, Φ(Δ / √(σ²_PPO + σ²_SFT)).
 
 ## Comparison vs. published SOTA instruct-tuned SLMs
 
-Each instruct baseline is scored with the **same** SLM-RL-Agent reward model per
+Each instruct baseline is scored with the **same** SLM-RL-Agents reward model per
 dataset. Lower perplexity = better; higher reward = better.
 
 {sota_table}
@@ -619,7 +619,7 @@ from peft import PeftModel
 # Pick one of the 15 (model, dataset) combinations
 model_key, dataset = "smollm2-360m", "wikitext"
 adapter_dir = snapshot_download(
-    repo_id="mr3haque/SLM-RL-Agent",
+    repo_id="mr3haque/SLM-RL-Agents",
     allow_patterns=f"sft/{{model_key}}/{{dataset}}/**",
 )
 adapter_path = f"{{adapter_dir}}/sft/{{model_key}}/{{dataset}}"
@@ -637,7 +637,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model_key, dataset = "smollm2-360m", "wikitext"
 ppo_dir = snapshot_download(
-    repo_id="mr3haque/SLM-RL-Agent",
+    repo_id="mr3haque/SLM-RL-Agents",
     allow_patterns=f"ppo/{{model_key}}/{{dataset}}/**",
 )
 ppo_path = f"{{ppo_dir}}/ppo/{{model_key}}/{{dataset}}"
@@ -657,7 +657,7 @@ model = AutoModelForCausalLM.from_pretrained(ppo_path)
 | **PPO**          | TRL 0.9.x                  | 250 steps, LR 5e-6, KL 0.05–0.2, score clip ±3σ, **float32**, weight rollback |
 
 Three engineering fixes unique to the SLM regime — all implemented in
-[`scripts/train_ppo.py`](https://github.com/rezwanh001/slm-rl-agent/blob/main/scripts/train_ppo.py):
+[`scripts/train_ppo.py`](https://github.com/rezwanh001/slm-rl-agents/blob/main/scripts/train_ppo.py):
 
 1. **Merge-and-reinitialize for PEFT+PPO.** TRL ≤ 0.9.x silently freezes LoRA
    parameters when the policy is a PEFT adapter. We merge the SFT adapter into
@@ -677,7 +677,7 @@ Three engineering fixes unique to the SLM regime — all implemented in
   title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
   author = {{Haque, Md. Rezwanul}},
   year   = {{2026}},
-  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agent}}}},
+  howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}},
   note   = {{University of Waterloo, CPAMI Lab}}
 }}
 ```
@@ -694,7 +694,7 @@ def stage_upload_model(api: HfApi) -> None:
         repo_id=MODEL_REPO,
         repo_type="model",
         folder_path=str(stage),
-        commit_message="Publish 15 SFT + 15 PPO checkpoints for the SLM-RL-Agent framework",
+        commit_message="Publish 15 SFT + 15 PPO checkpoints for the SLM-RL-Agents framework",
     )
     print("[upload-model] done")
 

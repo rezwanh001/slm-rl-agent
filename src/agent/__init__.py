@@ -1,5 +1,5 @@
 """
-SLM Agent Implementation for SLM-RL-Agent
+SLM Agent Implementation for SLM-RL-Agents
 
 This module provides the production-ready agent implementation that can be
 deployed for inference. The agent wraps a trained SLM and provides:

@@ -4,7 +4,7 @@
 """
 
 """
-Data Preparation Script for SLM-RL-Agent
+Data Preparation Script for SLM-RL-Agents
 
 This script downloads and prepares datasets for all stages of RLHF training:
 1. SFT datasets (instruction-following data)
@@ -236,7 +236,7 @@ def create_eval_split(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Prepare datasets for SLM-RL-Agent training")
+    parser = argparse.ArgumentParser(description="Prepare datasets for SLM-RL-Agents training")
     
     parser.add_argument(
         "--output_dir",

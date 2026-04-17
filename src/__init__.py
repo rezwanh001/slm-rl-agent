@@ -1,5 +1,5 @@
 """
-SLM-RL-Agent: Efficient Small Language Model Agents with Reinforcement Learning
+SLM-RL-Agents: Efficient Small Language Model Agents with Reinforcement Learning
 
 This package provides a complete framework for training Small Language Model (SLM) 
 AI Agents using Reinforcement Learning from Human Feedback (RLHF).
@@ -24,7 +24,7 @@ References:
 """
 
 __version__ = "1.0.0"
-__author__ = "SLM-RL-Agent Team"
+__author__ = "SLM-RL-Agents Team"
 
 from src.agent import SLMAgent
 from src.models import SLMModel, RewardModel

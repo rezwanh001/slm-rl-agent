@@ -1,5 +1,5 @@
 """
-Training Pipelines for SLM-RL-Agent
+Training Pipelines for SLM-RL-Agents
 
 This module provides trainers for all stages of the RLHF pipeline:
     - SFTTrainer: Supervised Fine-Tuning on instruction data

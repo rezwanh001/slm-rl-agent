@@ -1,5 +1,5 @@
 """
-Model architectures for SLM-RL-Agent.
+Model architectures for SLM-RL-Agents.
 
 This module provides model wrappers and custom architectures for:
     - Base SLM model loading with efficient training support

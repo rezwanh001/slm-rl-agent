@@ -4,7 +4,7 @@
 """
 
 """
-Comprehensive Evaluation Metrics for SLM-RL-Agent
+Comprehensive Evaluation Metrics for SLM-RL-Agents
 
 This module implements a complete suite of evaluation metrics for measuring the quality
 of small language models throughout the RLHF training process. Understanding these metrics

@@ -4,11 +4,11 @@
 """
 
 """
-Basic Tests for SLM-RL-Agent
+Basic Tests for SLM-RL-Agents
 
 Run tests with: pytest tests/
 
-These tests verify the basic functionality of the SLM-RL-Agent package.
+These tests verify the basic functionality of the SLM-RL-Agents package.
 """
 
 import pytest

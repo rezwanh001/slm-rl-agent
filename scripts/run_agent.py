@@ -4,7 +4,7 @@
 """
 
 """
-Agent Inference Script for SLM-RL-Agent
+Agent Inference Script for SLM-RL-Agents
 
 This script provides multiple ways to interact with a trained SLM agent. It supports
 three modes of operation: interactive chat (for testing and exploration), batch inference
@@ -57,7 +57,7 @@ def run_interactive(model_path: str, **kwargs):
     )
     
     print("\n" + "=" * 60)
-    print("SLM-RL-Agent Interactive Mode")
+    print("SLM-RL-Agents Interactive Mode")
     print("=" * 60)
     print("Type your message and press Enter to chat.")
     print("Commands: /quit (exit), /clear (reset conversation), /info (model info)")
@@ -197,7 +197,7 @@ def run_server(model_path: str, host: str = "0.0.0.0", port: int = 8000, **kwarg
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run SLM-RL-Agent for inference")
+    parser = argparse.ArgumentParser(description="Run SLM-RL-Agents for inference")
     
     # Required arguments
     parser.add_argument("--model_path", type=str, required=True,

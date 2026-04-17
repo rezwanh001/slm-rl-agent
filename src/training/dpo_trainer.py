@@ -4,7 +4,7 @@
 """
 
 """
-DPO Trainer for SLM-RL-Agent
+DPO Trainer for SLM-RL-Agents
 
 This module implements Direct Preference Optimization (DPO), a simpler and more stable
 alternative to PPO for aligning language models with human preferences.

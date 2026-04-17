@@ -4,7 +4,7 @@
 """
 
 """
-Reward Model Training Script for SLM-RL-Agent
+Reward Model Training Script for SLM-RL-Agents
 
 Uses TRL's RewardTrainer for robust preference-based training.
 

@@ -4,7 +4,7 @@
 """
 
 """
-Reward Model for SLM-RL-Agent
+Reward Model for SLM-RL-Agents
 
 This module implements a Reward Model for RLHF (Reinforcement Learning from Human Feedback).
 The reward model learns to predict human preferences from comparison data, providing

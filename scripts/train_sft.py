@@ -4,7 +4,7 @@
 """
 
 """
-SFT Training Script for SLM-RL-Agent
+SFT Training Script for SLM-RL-Agents
 
 This script runs Stage 1 of the RLHF pipeline: Supervised Fine-Tuning.
 It takes a base language model and fine-tunes it on instruction-following data.
@@ -121,7 +121,7 @@ def setup_model_and_tokenizer(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SFT Training for SLM-RL-Agent")
+    parser = argparse.ArgumentParser(description="SFT Training for SLM-RL-Agents")
     
     # Model arguments
     parser.add_argument("--model_name", type=str, default="EleutherAI/pythia-160m-deduped",

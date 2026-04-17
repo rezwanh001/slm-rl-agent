@@ -1,4 +1,4 @@
-# SLM-RL-Agent Requirements
+# SLM-RL-Agents Requirements
 # Core dependencies for training Small Language Model Agents with RLHF
 
 # ============================================

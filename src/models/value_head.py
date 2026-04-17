@@ -4,7 +4,7 @@
 """
 
 """
-Value Head for PPO Training in SLM-RL-Agent
+Value Head for PPO Training in SLM-RL-Agents
 
 This module implements the Value Head component used in Proximal Policy Optimization (PPO).
 The value head predicts the expected cumulative reward (value) for a given state,

@@ -4,7 +4,7 @@
 """
 
 """
-SLM Agent: The Core Agent Implementation for SLM-RL-Agent
+SLM Agent: The Core Agent Implementation for SLM-RL-Agents
 
 This module implements the main SLMAgent class, which provides a production-ready
 interface for using trained small language models as AI agents. The agent handles

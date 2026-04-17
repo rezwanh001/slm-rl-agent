@@ -1,5 +1,5 @@
 """
-Utility Functions for SLM-RL-Agent
+Utility Functions for SLM-RL-Agents
 
 This module provides common utilities used throughout the project:
     - Logging configuration

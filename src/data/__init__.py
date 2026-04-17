@@ -1,5 +1,5 @@
 """
-Data loading and preprocessing utilities for SLM-RL-Agent.
+Data loading and preprocessing utilities for SLM-RL-Agents.
 
 This module provides tools for:
     - Loading SFT datasets (instruction-following data)

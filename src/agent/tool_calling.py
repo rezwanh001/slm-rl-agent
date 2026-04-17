@@ -4,7 +4,7 @@
 """
 
 """
-Tool Calling Utilities for SLM-RL-Agent
+Tool Calling Utilities for SLM-RL-Agents
 
 This module provides the infrastructure for enabling Small Language Models to call
 external tools and functions. Tool calling (also known as function calling) is a

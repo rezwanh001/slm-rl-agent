@@ -4,7 +4,7 @@
 """
 
 """
-DPO Training Script for SLM-RL-Agent
+DPO Training Script for SLM-RL-Agents
 
 This script implements Direct Preference Optimization (DPO), an alternative to PPO
 that directly optimizes the policy on preference data without needing a separate
@@ -72,7 +72,7 @@ def load_preference_data(dataset_path: str) -> Dataset:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="DPO Training for SLM-RL-Agent")
+    parser = argparse.ArgumentParser(description="DPO Training for SLM-RL-Agents")
     
     # Model arguments
     parser.add_argument("--model_path", type=str, required=True,

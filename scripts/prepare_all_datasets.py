@@ -4,7 +4,7 @@
 """
 
 """
-Dataset Preparation for SLM-RL-Agent Experiments
+Dataset Preparation for SLM-RL-Agents Experiments
 
 Prepares three datasets for the RLHF pipeline:
 1. TinyStories - Short children's stories

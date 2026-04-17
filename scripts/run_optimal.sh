@@ -251,4 +251,4 @@ echo "============================================================"
 # Upload newly trained models to HuggingFace
 echo "Uploading new checkpoints to HuggingFace..."
 python3 /tmp/upload_single_repo.py --only-models --skip-delete 2>&1 | tee "$LOGS/hf_upload.log"
-echo "Upload complete. Repo: https://huggingface.co/datasets/mr3haque/SLM-RL-Agent"
+echo "Upload complete. Repo: https://huggingface.co/datasets/mr3haque/SLM-RL-Agents"

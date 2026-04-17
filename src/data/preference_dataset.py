@@ -4,7 +4,7 @@
 """
 
 """
-Preference Dataset Utilities for SLM-RL-Agent
+Preference Dataset Utilities for SLM-RL-Agents
 
 This module provides tools for creating and managing preference datasets
 used in reward model training and Direct Preference Optimization (DPO).

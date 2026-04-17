@@ -4,7 +4,7 @@
 """
 
 """
-Logging Utilities for SLM-RL-Agent
+Logging Utilities for SLM-RL-Agents
 
 This module provides standardized logging configuration for the project. Proper logging
 is essential for debugging, monitoring training progress, and understanding model behavior.
