@@ -238,13 +238,13 @@ Everything from this paper lives in exactly **two** Hugging Face repositories:
 
 | Artefact | 🤗 Repo | Contents |
 |---|---|---|
-| **Datasets** | **[`mr3haque/SLM-RL-Agentss-Data`](https://huggingface.co/datasets/mr3haque/SLM-RL-Agentss-Data)** | 3 preprocessed corpora × 4 splits each (`sft_train`, `sft_eval`, `preference_train`, `preference_eval`) |
+| **Datasets** | **[`mr3haque/SLM-RL-Agents-Data`](https://huggingface.co/datasets/mr3haque/SLM-RL-Agents-Data)** | 3 preprocessed corpora × 4 splits each (`sft_train`, `sft_eval`, `preference_train`, `preference_eval`) |
 | **Models**   | **[`mr3haque/SLM-RL-Agents`](https://huggingface.co/mr3haque/SLM-RL-Agents)**                  | 15 SFT LoRA adapters **+** 15 fully-merged PPO models, organised under `sft/{model}/{dataset}/` and `ppo/{model}/{dataset}/` |
 
 ### Dataset repo layout
 
 ```
-mr3haque/SLM-RL-Agentss-Data
+mr3haque/SLM-RL-Agents-Data
 └── datasets/
     ├── tinystories/    {sft_train, sft_eval, preference_train, preference_eval}.json
     ├── cnn_dailymail/  same
@@ -256,8 +256,8 @@ Load a specific split via the datasets library:
 ```python
 from datasets import load_dataset
 
-ds = load_dataset("mr3haque/SLM-RL-Agentss-Data", name="tinystories", split="sft_train")
-pref = load_dataset("mr3haque/SLM-RL-Agentss-Data", name="cnn_dailymail", split="preference_train")
+ds = load_dataset("mr3haque/SLM-RL-Agents-Data", name="tinystories", split="sft_train")
+pref = load_dataset("mr3haque/SLM-RL-Agents-Data", name="cnn_dailymail", split="preference_train")
 ```
 
 ### Model repo layout
@@ -327,7 +327,7 @@ model = AutoModelForCausalLM.from_pretrained(ppo_path)
 ### Setup
 
 ```bash
-git clone https://github.com/rezwanh001/slm-rl-agentss.git
+git clone https://github.com/rezwanh001/slm-rl-agents.git
 cd slm-rl-agent
 
 # Create conda environment
