@@ -315,7 +315,7 @@ def create_preference_pairs(
     
     Example:
         >>> # Using a reward model
-        >>> from src.models import RewardModel
+        >>> from src.slm_rl_agent.rewards import RewardModel  # পূর্বে: from src.models import RewardModel
         >>> rm = RewardModel.from_pretrained("path/to/reward_model")
         >>> dataset = create_preference_pairs(prompts, responses, reward_model=rm)
         

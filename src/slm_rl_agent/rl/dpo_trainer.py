@@ -423,7 +423,7 @@ def train_dpo(
         Path to saved model
         
     Example:
-        >>> from src.data import load_preference_dataset
+        >>> from src.slm_rl_agent.data import load_preference_dataset  # পূর্বে: from src.data import ...
         >>> dataset = load_preference_dataset("HuggingFaceH4/ultrafeedback_binarized")
         >>> model_path = train_dpo(
         ...     model_name_or_path="./outputs/sft/final",

@@ -29,19 +29,23 @@ class TestImports:
     
     def test_import_data_module(self):
         """Test importing data utilities."""
-        from src.data import load_sft_dataset, load_preference_dataset
+        # পূর্বে: from src.data import load_sft_dataset, load_preference_dataset
+        from src.slm_rl_agent.data import load_sft_dataset, load_preference_dataset
         assert callable(load_sft_dataset)
         assert callable(load_preference_dataset)
-    
+
     def test_import_models_module(self):
         """Test importing model classes."""
-        from src.models import SLMModel, RewardModel
+        # পূর্বে: from src.models import SLMModel, RewardModel
+        from src.slm_rl_agent.models import SLMModel
+        from src.slm_rl_agent.rewards import RewardModel
         assert SLMModel is not None
         assert RewardModel is not None
-    
+
     def test_import_training_module(self):
         """Test importing training utilities."""
-        from src.training import (
+        # পূর্বে: from src.training import (...)
+        from src.slm_rl_agent.rl import (
             SFTTrainerWrapper,
             DPOTrainerWrapper,
             PPOTrainerWrapper,
@@ -69,7 +73,8 @@ class TestImports:
     
     def test_import_utils_module(self):
         """Test importing utility functions."""
-        from src.utils import setup_logging, load_config, save_checkpoint
+        # পূর্বে: from src.utils import setup_logging, load_config, save_checkpoint
+        from src.slm_rl_agent.utils import setup_logging, load_config, save_checkpoint
         assert callable(setup_logging)
         assert callable(load_config)
 
@@ -79,7 +84,8 @@ class TestDataProcessor:
     
     def test_data_collator_initialization(self):
         """Test that data collators can be initialized."""
-        from src.data.data_processor import DataCollatorForSFT, DataCollatorForPreference
+        # পূর্বে: from src.data.data_processor import ...
+        from src.slm_rl_agent.data.data_processor import DataCollatorForSFT, DataCollatorForPreference
         from transformers import AutoTokenizer
         
         tokenizer = AutoTokenizer.from_pretrained("gpt2")
@@ -97,7 +103,8 @@ class TestPreferenceDataset:
     
     def test_create_preference_dataset(self):
         """Test creating a preference dataset from lists."""
-        from src.data.preference_dataset import PreferenceDataset
+        # পূর্বে: from src.data.preference_dataset import PreferenceDataset
+        from src.slm_rl_agent.data.preference_dataset import PreferenceDataset
         
         dataset = PreferenceDataset.from_comparisons(
             prompts=["What is 2+2?", "What is the capital of France?"],
@@ -112,7 +119,8 @@ class TestPreferenceDataset:
     
     def test_preference_dataset_statistics(self):
         """Test computing dataset statistics."""
-        from src.data.preference_dataset import PreferenceDataset
+        # পূর্বে: from src.data.preference_dataset import PreferenceDataset
+        from src.slm_rl_agent.data.preference_dataset import PreferenceDataset
         
         dataset = PreferenceDataset.from_comparisons(
             prompts=["Question 1", "Question 2"],
@@ -221,7 +229,8 @@ class TestConfigUtils:
     
     def test_merge_configs(self):
         """Test merging configuration dictionaries."""
-        from src.utils.config_utils import merge_configs
+        # পূর্বে: from src.utils.config_utils import merge_configs
+        from src.slm_rl_agent.utils.config_utils import merge_configs
         
         base = {"a": 1, "b": {"c": 2, "d": 3}}
         override = {"b": {"c": 4}, "e": 5}
@@ -235,7 +244,8 @@ class TestConfigUtils:
     
     def test_get_default_config(self):
         """Test getting default configurations."""
-        from src.utils.config_utils import get_default_config
+        # পূর্বে: from src.utils.config_utils import get_default_config
+        from src.slm_rl_agent.utils.config_utils import get_default_config
         
         sft_config = get_default_config("sft")
         dpo_config = get_default_config("dpo")

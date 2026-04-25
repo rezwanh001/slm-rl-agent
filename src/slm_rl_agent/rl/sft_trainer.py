@@ -436,7 +436,7 @@ def train_sft(
         Path to the saved model directory
     
     Example:
-        >>> from src.data import load_sft_dataset
+        >>> from src.slm_rl_agent.data import load_sft_dataset  # পূর্বে: from src.data import ...
         >>> from transformers import AutoTokenizer
         >>> tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-160m")
         >>> dataset = load_sft_dataset("HuggingFaceH4/ultrachat_200k", tokenizer)

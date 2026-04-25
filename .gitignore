@@ -5,6 +5,8 @@
 scripts/generate_figures.py
 scripts/aggregate_results.py
 
+docs/
+
 # Paper — never tracked
 paper/
 

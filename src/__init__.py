@@ -27,7 +27,10 @@ __version__ = "1.0.0"
 __author__ = "SLM-RL-Agents Team"
 
 from src.agent import SLMAgent
-from src.models import SLMModel, RewardModel
+# পূর্বে: from src.models import SLMModel, RewardModel
+# README-অনুযায়ী মডিউলগুলো এখন `src.slm_rl_agent.*` namespace-এ আছে।
+from src.slm_rl_agent.models import SLMModel
+from src.slm_rl_agent.rewards import RewardModel
 
 __all__ = [
     "SLMAgent",
