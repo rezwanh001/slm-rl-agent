@@ -170,7 +170,7 @@ tags:
   - preference-pairs
   - sft
   - small-language-models
-  - slm-rl-agent
+  - slm-rl-agents
 size_categories:
   - 10K<n<100K
 configs:
@@ -503,7 +503,7 @@ tags:
   - small-language-models
   - pythia
   - smollm2
-  - slm-rl-agent
+  - slm-rl-agents
 base_model:
   - EleutherAI/pythia-70m-deduped
   - EleutherAI/pythia-160m-deduped

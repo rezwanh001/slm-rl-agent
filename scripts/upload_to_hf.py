@@ -89,7 +89,7 @@ tags:
   - reward-modeling
   - sft
   - small-language-models
-  - slm-rl-agent
+  - slm-rl-agents
 size_categories:
   - 10K<n<100K
 ---
@@ -184,7 +184,7 @@ tags:
   - lora
   - sft
   - small-language-model
-  - slm-rl-agent
+  - slm-rl-agents
   - {m['family'].lower()}
 language:
   - en
@@ -273,7 +273,7 @@ tags:
   - ppo
   - trl
   - small-language-model
-  - slm-rl-agent
+  - slm-rl-agents
   - {m['family'].lower()}
 language:
   - en
