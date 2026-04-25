@@ -552,7 +552,7 @@ while not state.is_terminal:
 ## Project Structure
 
 ```
-slm-rl-agents/
+SLM-RL-Agents/
 ├── src/
 │   ├── slm_rl_agent/             # Core library (single-turn stack)
 │   │   ├── data/                 # Dataset builders (SFT + preference pairs)
