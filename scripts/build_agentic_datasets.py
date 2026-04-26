@@ -218,12 +218,18 @@ def build_task_a(
 # ===========================================================================
 
 def _cnn_to_paragraphs(article: str) -> List[str]:
+    # পূর্বে: শুধু `if not paras` চেক ছিল — কিন্তু CNN/DailyMail-এর `text`
+    # ফিল্ডে newline প্রায় নেই, ফলে `_split_paragraphs` সবসময় ১টা প্যারা
+    # ফেরত দিত এবং পরের `len(paragraphs) < 2` চেক সবগুলো রো বাদ দিত।
+    # তাই ১টার বেশি প্যারা না পেলে sentence-chunking-এ ফ্যালব্যাক করা হলো।
     paras = _split_paragraphs(article)
-    if paras:
+    if len(paras) >= 2:
         return paras
-    # Fallback - split by sentence groups.
-    sentences = re.split(r"(?<=[.!?])\s+", article)
-    return [" ".join(sentences[i:i+3]) for i in range(0, len(sentences), 3)]
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", article) if s.strip()]
+    if len(sentences) < 2:
+        return paras
+    chunks = [" ".join(sentences[i:i + 3]) for i in range(0, len(sentences), 3)]
+    return [c for c in chunks if c]
 
 
 def _synthetic_summary_tooluse_demo(
@@ -329,29 +335,105 @@ def build_task_b(
 
 _YEAR_RE = re.compile(r"\b(1[5-9]\d{2}|20\d{2})\b")
 
-# Matches patterns like "X was born in 1912" or "Y was founded in Paris"
-_BORN_RE = re.compile(
-    r"\b(?P<ent>[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+){0,2})\b\s+was\s+born\s+in\s+(?P<val>\w+)",
+# পূর্বে: শুধু `was born in` ও `was founded in` দুইটা কঠিন প্যাটার্ন ছিল —
+# Wikitext-103-এ এ ধরনের বাক্যগঠন বিরল, তাই একটা প্যারাগ্রাফেও দুটি ভিন্ন
+# fact পাওয়া যেত না, ফলে multi-hop প্রশ্ন তৈরি হতো না (output 0)।
+# এখন থেকে: একটা সাধারণ `<Entity> <verb> ... <year>` প্যাটার্ন +
+# parenthetical birth-year প্যাটার্ন (e.g. "Alan Turing (1912 – 1954)")
+# ব্যবহার করা হচ্ছে — দুটোই Wikitext গদ্যে অহরহ দেখা যায়।
+_RELATION_VERBS: Dict[str, List[str]] = {
+    "born_in":     ["was born in", "born in"],
+    "died_in":     ["died in", "passed away in"],
+    "founded_in":  ["was founded in", "was established in", "was created in"],
+    "released_in": ["was released in", "was published in", "premiered in", "debuted in"],
+    "located_in":  ["is located in", "is situated in", "is based in"],
+    "written_by":  ["was written by", "was composed by", "was directed by", "was produced by"],
+}
+
+# Pre-compile each verb phrase as a regex that captures (entity, value).
+# Entity is 1-3 capitalised tokens; value is a year, a capitalised noun
+# phrase, or a single lowercased token (city / country names usually fall
+# in the first two cases).
+_RELATION_RES: List[Tuple[str, "re.Pattern[str]"]] = []
+for rel, verbs in _RELATION_VERBS.items():
+    for verb in verbs:
+        verb_re = verb.replace(" ", r"\s+")
+        pat = re.compile(
+            r"\b(?P<ent>[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\s+"
+            + verb_re
+            + r"\s+(?P<val>(?:1[5-9]\d{2}|20\d{2})|[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})"
+        )
+        _RELATION_RES.append((rel, pat))
+
+# "Alan Turing ( 1912 – 1954 )" style birth/death years.
+_PAREN_LIFETIME_RE = re.compile(
+    r"\b(?P<ent>[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){1,2})\s*\(\s*"
+    r"(?P<born>1[5-9]\d{2}|20\d{2})\s*[–\-]\s*(?P<died>1[5-9]\d{2}|20\d{2})\s*\)"
 )
-_FOUND_RE = re.compile(
-    r"\b(?P<ent>[A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+){0,2})\b\s+was\s+founded\s+in\s+(?P<val>\w+)",
+
+# "Entity ( 1990 )" — a single year next to a capitalised noun phrase
+# (Wikitext-103 uses this for film / album / book release dates).
+_PAREN_YEAR_RE = re.compile(
+    r"\b(?P<ent>[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\s*\(\s*"
+    r"(?P<val>1[5-9]\d{2}|20\d{2})\s*\)"
+)
+
+# "In YYYY , Entity verbed ..." — encyclopaedic prose biographies use this
+# almost universally. Captures (entity, occurred_in, year).
+_IN_YEAR_RE = re.compile(
+    r"\bIn\s+(?P<val>1[5-9]\d{2}|20\d{2})\s*,?\s+"
+    r"(?P<ent>[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\s+(?:was|is|became|joined|founded|wrote|released|directed|composed|published|moved|travelled|won|created)"
 )
 
 
 def _extract_facts(paragraphs: List[str]) -> List[Dict[str, Any]]:
     facts: List[Dict[str, Any]] = []
+    seen: set = set()  # de-dupe (entity, relation, value) triples per article
     for para_id, p in enumerate(paragraphs):
-        for m in _BORN_RE.finditer(p):
+        for rel, pat in _RELATION_RES:
+            for m in pat.finditer(p):
+                key = (m.group("ent"), rel, m.group("val"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                facts.append({
+                    "entity": m.group("ent"),
+                    "relation": rel,
+                    "value": m.group("val"),
+                    "paragraph_id": para_id,
+                })
+        for m in _PAREN_LIFETIME_RE.finditer(p):
+            ent = m.group("ent")
+            for rel, val in (("born_in", m.group("born")), ("died_in", m.group("died"))):
+                key = (ent, rel, val)
+                if key in seen:
+                    continue
+                seen.add(key)
+                facts.append({
+                    "entity": ent,
+                    "relation": rel,
+                    "value": val,
+                    "paragraph_id": para_id,
+                })
+        for m in _PAREN_YEAR_RE.finditer(p):
+            key = (m.group("ent"), "released_in", m.group("val"))
+            if key in seen:
+                continue
+            seen.add(key)
             facts.append({
                 "entity": m.group("ent"),
-                "relation": "born_in",
+                "relation": "released_in",
                 "value": m.group("val"),
                 "paragraph_id": para_id,
             })
-        for m in _FOUND_RE.finditer(p):
+        for m in _IN_YEAR_RE.finditer(p):
+            key = (m.group("ent"), "occurred_in", m.group("val"))
+            if key in seen:
+                continue
+            seen.add(key)
             facts.append({
                 "entity": m.group("ent"),
-                "relation": "founded_in",
+                "relation": "occurred_in",
                 "value": m.group("val"),
                 "paragraph_id": para_id,
             })
@@ -421,9 +503,13 @@ def build_task_c(
     tooluse_sft: List[Dict[str, Any]] = []
     pref_pairs: List[Dict[str, Any]] = []
 
+    # পূর্বে: ৫-প্যারার ছোট window + প্রতিটা entity-র জন্য মাত্র ১টা প্রশ্ন
+    # বানানো হতো, ফলে output ছিল মাত্র ৪০-এর কাছাকাছি। এখন window বাড়ানো
+    # হয়েছে এবং একই entity-র যেকোনো দুই ভিন্ন (relation,value) জোড়াকে
+    # multi-hop প্রশ্ন বানানোর জন্য ব্যবহার করা হচ্ছে।
     art_id = 0
-    for start in range(0, len(paragraphs), 5):
-        article_paras = paragraphs[start: start + 5]
+    for start in range(0, len(paragraphs), 10):
+        article_paras = paragraphs[start: start + 10]
         if len(article_paras) < 3:
             continue
 
@@ -431,7 +517,6 @@ def build_task_c(
         if len(facts) < 2:
             continue
 
-        # Pick up to 3 multi-hop questions from this article.
         by_entity: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
         for f in facts:
             by_entity[f["entity"]].append(f)
@@ -439,7 +524,18 @@ def build_task_c(
         for ent, ent_facts in by_entity.items():
             if len(ent_facts) < 2 or len(prompts) >= num_train:
                 continue
-            q = _make_multihop_question(ent_facts[0], ent_facts[1])
+            # Try every distinct (i, j) pair of this entity's facts; emit the
+            # first one that yields a valid multi-hop question (i.e. the two
+            # facts use different relations).
+            q = None
+            for i in range(len(ent_facts)):
+                for j in range(i + 1, len(ent_facts)):
+                    candidate = _make_multihop_question(ent_facts[i], ent_facts[j])
+                    if candidate is not None:
+                        q = candidate
+                        break
+                if q is not None:
+                    break
             if q is None:
                 continue
 

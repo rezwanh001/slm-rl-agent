@@ -254,5 +254,117 @@ class TestConfigUtils:
         assert "beta" in dpo_config
 
 
+class TestAgenticScaffolding:
+    """Forward-compatibility scaffolding for the multi-turn agentic case."""
+
+    def test_action_parser_recognises_four_types(self):
+        from src.agentic import parse_action, ActionType
+        assert parse_action('<finish>done</finish>').type == ActionType.FINISH
+        assert parse_action('<ask>which one?</ask>').type == ActionType.ASK_USER
+        tc = parse_action('<tool name="length_check">{"text": "hi"}</tool>')
+        assert tc.type == ActionType.TOOL_CALL
+        assert tc.tool_name == "length_check"
+        assert tc.tool_args == {"text": "hi"}
+        assert parse_action('plain tokens').type == ActionType.TOKENS
+
+    def test_environment_runs_scripted_episode(self):
+        from src.agentic import AgenticEnvironment, State
+
+        def echo(args, _state):
+            return f"echoed: {args.get('text', '')}"
+
+        def reward(traj):
+            return (1.0 if traj.final_state.finalised_answer else 0.0), {}
+
+        script = iter([
+            '<tool name="echo">{"text": "hi"}</tool>',
+            '<finish>got it</finish>',
+        ])
+        env = AgenticEnvironment(tools={"echo": echo}, reward_fn=reward)
+        traj = env.run_episode(
+            State(task_prompt="ok"),
+            policy=lambda _p: next(script, "<finish>fallback</finish>"),
+        )
+        assert traj.final_state.finalised_answer == "got it"
+        assert traj.reward_total == 1.0
+        assert any(t["event"] == "tool_call" for t in traj.turns)
+
+    def test_story_tools_compute_constraints(self):
+        from src.agentic import build_story_tools
+        tools = build_story_tools()
+        out = tools["length_check"]({"text": "one two three", "max_words": 5}, None)
+        assert "within_budget=true" in out
+        out = tools["character_check"](
+            {"text": "the rabbit ran", "characters": ["rabbit", "fox"]}, None
+        )
+        assert "all_present=false" in out and "fox" in out
+
+    def test_summarisation_tools_use_bow_fallback(self):
+        from src.agentic import ArticleIndex, build_summarisation_tools
+        idx = ArticleIndex(
+            paragraphs=[
+                "The telescope launches in 2026.",
+                "Astronomers expect sharper images.",
+            ],
+            article_id="t",
+        )
+        tools = build_summarisation_tools(idx)
+        out = tools["retrieve"]({"query": "telescope", "k": 1}, None)
+        assert "telescope" in out
+        out = tools["cite_check"](
+            {"sentence": "Telescope launches in 2026.", "paragraph_id": 0}, None
+        )
+        assert "grounded=" in out and "overlap_f1=" in out
+
+    def test_kb_tools_arithmetic_is_sandboxed(self):
+        from src.agentic import KnowledgeBase, ArticleIndex, build_kb_tools
+        idx = ArticleIndex(paragraphs=["x"], article_id="t")
+        kb = KnowledgeBase(facts=[
+            {"entity": "Alan Turing", "relation": "born_in", "value": "1912"},
+        ])
+        tools = build_kb_tools(kb, idx)
+        assert "result=42" in tools["arithmetic"]({"expr": "1954 - 1912"}, None)
+        # rejected: any non-arithmetic input
+        assert tools["arithmetic"]({"expr": "__import__('os')"}, None).startswith("error:")
+        assert "Alan Turing" in tools["entity_lookup"]({"entity": "Alan Turing"}, None)
+
+
+class TestAgenticDatasetBuilders:
+    """Smoke-test the dataset builders for the three forward-compatibility tasks.
+
+    These run only if the upstream SFT splits exist on disk (built by
+    ``scripts/prepare_all_datasets.py``). On a fresh checkout without data,
+    the tests are skipped rather than failed.
+    """
+
+    @pytest.fixture(scope="class")
+    def project_root(self):
+        return Path(__file__).parent.parent
+
+    def _have(self, root: Path, dataset: str) -> bool:
+        return (root / "data" / dataset / "sft_train.json").exists()
+
+    def test_task_b_paragraph_splitter_handles_single_paragraph(self):
+        # পূর্বে: একটাই প্যারা থাকলে fallback ট্রিগার হতো না — ফলে Task B
+        # খালি output দিত। এই টেস্ট ঐ বাগের রিগ্রেশন গার্ড।
+        from scripts.build_agentic_datasets import _cnn_to_paragraphs
+        article = "Sentence one. Sentence two. Sentence three. Sentence four."
+        paras = _cnn_to_paragraphs(article)
+        assert len(paras) >= 2, f"expected >=2 chunks, got {len(paras)}"
+
+    def test_task_c_extracts_facts_from_lifetime_pattern(self):
+        from scripts.build_agentic_datasets import _extract_facts
+        # "Alan Turing ( 1912 – 1954 )" — wikitext biographical convention.
+        facts = _extract_facts(["Alan Turing ( 1912 – 1954 ) was a mathematician."])
+        rels = {f["relation"] for f in facts}
+        assert "born_in" in rels and "died_in" in rels
+
+    def test_task_a_outputs_required_files(self, project_root):
+        if not self._have(project_root, "tinystories"):
+            pytest.skip("tinystories sft_train.json not present; run prepare_all_datasets.py first")
+        for fname in ("task_prompts.json", "sft_tooluse.json", "trajectory_prefs.json"):
+            assert (project_root / "data" / "agentic" / "task_a_tinystories" / fname).exists(), fname
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
