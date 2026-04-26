@@ -154,16 +154,21 @@ _FINISH_RE = re.compile(r"<finish>(?P<body>.*?)</finish>", flags=re.DOTALL)
 
 def parse_action(text: str) -> ParsedAction:
     """Return the *first* action sentinel found, or TOKENS if none."""
-    m = _FINISH_RE.search(text)
-    if m:
-        return ParsedAction(
-            type=ActionType.FINISH,
-            payload=m.group("body").strip(),
-            raw=m.group(0),
-        )
+    # পূর্বে: প্রথমে _FINISH_RE → তারপর _TOOL_RE → _ASK_RE — এই ক্রম ভুল ছিল।
+    # মডেল যদি tool কল আগে emit করে এবং পরে finish, তাহলেও finish আগে match হতো।
+    # এখন position অনুযায়ী earliest sentinel-কে winner ধরা হচ্ছে — docstring
+    # ("first action sentinel found") অনুযায়ী।
+    candidates = []
+    for kind, rgx in (("tool", _TOOL_RE), ("ask", _ASK_RE), ("finish", _FINISH_RE)):
+        m = rgx.search(text)
+        if m:
+            candidates.append((m.start(), kind, m))
+    if not candidates:
+        return ParsedAction(type=ActionType.TOKENS, payload=text, raw=text)
+    candidates.sort(key=lambda c: c[0])
+    _, kind, m = candidates[0]
 
-    m = _TOOL_RE.search(text)
-    if m:
+    if kind == "tool":
         body = m.group("body").strip()
         try:
             args = json.loads(body) if body else {}
@@ -180,16 +185,18 @@ def parse_action(text: str) -> ParsedAction:
             tool_args=args,
             raw=m.group(0),
         )
-
-    m = _ASK_RE.search(text)
-    if m:
+    if kind == "ask":
         return ParsedAction(
             type=ActionType.ASK_USER,
             payload=m.group("body").strip(),
             raw=m.group(0),
         )
-
-    return ParsedAction(type=ActionType.TOKENS, payload=text, raw=text)
+    # kind == "finish"
+    return ParsedAction(
+        type=ActionType.FINISH,
+        payload=m.group("body").strip(),
+        raw=m.group(0),
+    )
 
 
 # ---------------------------------------------------------------------------
