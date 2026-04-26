@@ -6,16 +6,16 @@
 """
 Consolidate SLM-RL-Agents artefacts into exactly TWO Hugging Face repos:
 
-    mr3haque/SLM-RL-Agentss-Data   (dataset)
+    mr3haque/SLM-RL-Agents-Data   (dataset)
     mr3haque/SLM-RL-Agents        (model)
 
 Actions (run individually with --stage):
 
     1. rename-data      Rename existing  mr3haque/SLM-RL-Agents (dataset)
-                        to mr3haque/SLM-RL-Agentss-Data.  Preserves downloads.
+                        to mr3haque/SLM-RL-Agents-Data.  Preserves downloads.
     2. clean-data       Wipe stale models/* from inside the data repo.
     3. upload-data      Upload 3 preprocessed datasets + polished README
-                        with result tables into SLM-RL-Agentss-Data.
+                        with result tables into SLM-RL-Agents-Data.
     4. create-model     Create mr3haque/SLM-RL-Agents model repo.
     5. stage-model      Merge 15 PPO checkpoints into full models and
                         build the full staging tree on disk.
@@ -47,7 +47,7 @@ RESULTS = ROOT / "results" / "all_results.json"
 
 NAMESPACE = "mr3haque"
 OLD_DATA_REPO = f"{NAMESPACE}/SLM-RL-Agents"           # current dataset repo
-NEW_DATA_REPO = f"{NAMESPACE}/SLM-RL-Agentss-Data"      # renamed dataset repo
+NEW_DATA_REPO = f"{NAMESPACE}/SLM-RL-Agents-Data"      # renamed dataset repo
 MODEL_REPO    = f"{NAMESPACE}/SLM-RL-Agents"           # new model repo
 
 STAGE_ROOT = Path("/tmp/slm-rl-agent-staging")
@@ -206,9 +206,11 @@ configs:
         path: datasets/wikitext/preference_eval.json
 ---
 
-# SLM-RL-Agentss-Data
+# SLM-RL-Agents-Data
 
-**Companion datasets for the paper *Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement*.**
+**Companion datasets for the paper *Towards Robust Reinforcement Learning for Small-Scale Language Model Agents*.**
+
+**Authors:** Md Rezwanul Haque, Md. Milon Islam, Fakhri Karray
 
 | | |
 |---|---|
@@ -243,18 +245,18 @@ the exact pipeline is reproducible via
 from datasets import load_dataset
 
 # Load TinyStories SFT split
-ds = load_dataset("mr3haque/SLM-RL-Agentss-Data", name="tinystories", split="sft_train")
+ds = load_dataset("mr3haque/SLM-RL-Agents-Data", name="tinystories", split="sft_train")
 print(ds[0])
 
 # Load CNN/DailyMail preference pairs
-pref = load_dataset("mr3haque/SLM-RL-Agentss-Data", name="cnn_dailymail", split="preference_train")
+pref = load_dataset("mr3haque/SLM-RL-Agents-Data", name="cnn_dailymail", split="preference_train")
 print(pref[0]["prompt"], "|", pref[0]["chosen"])
 ```
 
 Or clone the raw JSON files directly:
 
 ```bash
-huggingface-cli download mr3haque/SLM-RL-Agentss-Data \\
+huggingface-cli download mr3haque/SLM-RL-Agents-Data \\
     --repo-type dataset --local-dir ./slm-rl-data
 ```
 
@@ -299,12 +301,12 @@ All 30 trained checkpoints (15 SFT + 15 PPO) are published in the companion repo
 ## Citation
 
 ```bibtex
-@misc{{haque2026slmrlagent,
-  title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
-  author = {{Haque, Md. Rezwanul}},
-  year   = {{2026}},
+@misc{{haque2026slmrlagents,
+  title        = {{Towards Robust Reinforcement Learning for Small-Scale Language Model Agents}},
+  author       = {{Haque, Md Rezwanul and Islam, Md. Milon and Karray, Fakhri}},
+  year         = {{2026}},
   howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}},
-  note   = {{University of Waterloo, CPAMI Lab}}
+  note         = {{University of Waterloo, CPAMI Lab}}
 }}
 ```
 
@@ -511,18 +513,20 @@ base_model:
   - HuggingFaceTB/SmolLM2-135M
   - HuggingFaceTB/SmolLM2-360M
 datasets:
-  - mr3haque/SLM-RL-Agentss-Data
+  - mr3haque/SLM-RL-Agents-Data
 ---
 
 # SLM-RL-Agents — Models
 
-**Companion model repository for the paper *Efficiently Enhancing SLM Agents:
-A Reinforcement Learning Approach to Performance Improvement*.**
+**Companion model repository for the paper *Towards Robust Reinforcement Learning
+for Small-Scale Language Model Agents*.**
+
+**Authors:** Md Rezwanul Haque, Md. Milon Islam, Fakhri Karray
 
 | | |
 |---|---|
 | **Code** | [github.com/rezwanh001/slm-rl-agents](https://github.com/rezwanh001/slm-rl-agents) |
-| **Datasets** | [`mr3haque/SLM-RL-Agentss-Data`](https://huggingface.co/datasets/mr3haque/SLM-RL-Agentss-Data) |
+| **Datasets** | [`mr3haque/SLM-RL-Agents-Data`](https://huggingface.co/datasets/mr3haque/SLM-RL-Agents-Data) |
 | **License** | Apache-2.0 |
 | **Hardware** | 1 × NVIDIA RTX A6000 (48 GB) |
 
@@ -673,12 +677,12 @@ Three engineering fixes unique to the SLM regime — all implemented in
 ## Citation
 
 ```bibtex
-@misc{{haque2026slmrlagent,
-  title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
-  author = {{Haque, Md. Rezwanul}},
-  year   = {{2026}},
+@misc{{haque2026slmrlagents,
+  title        = {{Towards Robust Reinforcement Learning for Small-Scale Language Model Agents}},
+  author       = {{Haque, Md Rezwanul and Islam, Md. Milon and Karray, Fakhri}},
+  year         = {{2026}},
   howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}},
-  note   = {{University of Waterloo, CPAMI Lab}}
+  note         = {{University of Waterloo, CPAMI Lab}}
 }}
 ```
 """

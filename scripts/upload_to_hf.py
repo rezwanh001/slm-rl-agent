@@ -6,6 +6,16 @@
 """
 Upload SLM-RL-Agents datasets and models to HuggingFace Hub.
 
+# ⚠️  DEPRECATED — DO NOT RUN ⚠️
+# পূর্বে এই স্ক্রিপ্ট প্রতি (model, dataset) জোড়ার জন্য আলাদা HF repo বানাত
+# (33টি repo: 3 dataset + 15 SFT + 15 PPO)। 2026-04-17 তারিখে সবগুলো
+# per-config repo মুছে ফেলা হয়েছে এবং সব checkpoint একটিমাত্র consolidated
+# repo `mr3haque/SLM-RL-Agents`-এ রাখা হয়েছে। এখন থেকে আপলোডের জন্য
+# `scripts/consolidate_hf.py` ব্যবহার করতে হবে।
+#
+# এই ফাইলটি reference / template হিসেবে রাখা হয়েছে (model card text-গুলো
+# এখনও কাজে লাগে); চালানো হলে এটি অস্তিত্বহীন repo-তে push করার চেষ্টা করবে।
+
 Produces the following repos under the configured HF namespace:
 
 Datasets (3):
@@ -17,7 +27,7 @@ Models (30):
   {NS}/slm-rl-{model_slug}-sft-{dataset}   (LoRA adapter, references public base)
   {NS}/slm-rl-{model_slug}-ppo-{dataset}   (merged full model: base + SFT LoRA + PPO LoRA)
 
-Usage:
+Usage (DEPRECATED — use scripts/consolidate_hf.py instead):
   python scripts/upload_to_hf.py --namespace mr3haque               # upload everything
   python scripts/upload_to_hf.py --namespace mr3haque --only datasets
   python scripts/upload_to_hf.py --namespace mr3haque --only sft
@@ -103,7 +113,9 @@ model on preference pairs, and (3) further improve the SFT policy with PPO.
 
 ## Companion paper
 
-> *Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement*
+> *Towards Robust Reinforcement Learning for Small-Scale Language Model Agents*
+>
+> Authors: Md Rezwanul Haque, Md. Milon Islam, Fakhri Karray
 >
 > Code: https://github.com/rezwanh001/slm-rl-agents
 
@@ -143,10 +155,10 @@ print(ds)
 ## Citation
 
 ```bibtex
-@misc{{slmrlagent2026,
-  title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
-  author = {{Haque, Md. Rezwanul and collaborators}},
-  year   = {{2026}},
+@misc{{haque2026slmrlagents,
+  title        = {{Towards Robust Reinforcement Learning for Small-Scale Language Model Agents}},
+  author       = {{Haque, Md Rezwanul and Islam, Md. Milon and Karray, Fakhri}},
+  year         = {{2026}},
   howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}}
 }}
 ```
@@ -233,12 +245,21 @@ Reward mean is computed by the SLM-RL-Agents reward model trained on the same pr
 ## Usage
 
 ```python
+# All 30 checkpoints live in the consolidated repo {namespace}/SLM-RL-Agents
+# under sft/{{model}}/{{dataset}}/ and ppo/{{model}}/{{dataset}}/
+from huggingface_hub import snapshot_download
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 
-base = AutoModelForCausalLM.from_pretrained("{m['hf_base']}")
-tok  = AutoTokenizer.from_pretrained("{namespace}/slm-rl-{model_key}-sft-{dataset}")
-model = PeftModel.from_pretrained(base, "{namespace}/slm-rl-{model_key}-sft-{dataset}")
+adapter_root = snapshot_download(
+    repo_id="{namespace}/SLM-RL-Agents",
+    allow_patterns="sft/{model_key}/{dataset}/**",
+)
+adapter_path = f"{{adapter_root}}/sft/{model_key}/{dataset}"
+
+base  = AutoModelForCausalLM.from_pretrained("{m['hf_base']}")
+tok   = AutoTokenizer.from_pretrained(adapter_path)
+model = PeftModel.from_pretrained(base, adapter_path)
 model.eval()
 
 prompt = "Once upon a time"
@@ -249,10 +270,10 @@ print(tok.decode(out[0], skip_special_tokens=True))
 ## Citation
 
 ```bibtex
-@misc{{slmrlagent2026,
-  title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
-  author = {{Haque, Md. Rezwanul and collaborators}},
-  year   = {{2026}},
+@misc{{haque2026slmrlagents,
+  title        = {{Towards Robust Reinforcement Learning for Small-Scale Language Model Agents}},
+  author       = {{Haque, Md Rezwanul and Islam, Md. Milon and Karray, Fakhri}},
+  year         = {{2026}},
   howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}}
 }}
 ```
@@ -317,10 +338,19 @@ Training uses a single NVIDIA RTX A6000 (48 GB). Per-config training budget: a f
 ## Usage
 
 ```python
+# All 30 checkpoints live in the consolidated repo {namespace}/SLM-RL-Agents
+# under sft/{{model}}/{{dataset}}/ and ppo/{{model}}/{{dataset}}/
+from huggingface_hub import snapshot_download
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-tok = AutoTokenizer.from_pretrained("{namespace}/slm-rl-{model_key}-ppo-{dataset}")
-model = AutoModelForCausalLM.from_pretrained("{namespace}/slm-rl-{model_key}-ppo-{dataset}")
+ppo_root = snapshot_download(
+    repo_id="{namespace}/SLM-RL-Agents",
+    allow_patterns="ppo/{model_key}/{dataset}/**",
+)
+ppo_path = f"{{ppo_root}}/ppo/{model_key}/{dataset}"
+
+tok   = AutoTokenizer.from_pretrained(ppo_path)
+model = AutoModelForCausalLM.from_pretrained(ppo_path)
 model.eval()
 
 prompt = "Once upon a time"
@@ -331,16 +361,16 @@ print(tok.decode(out[0], skip_special_tokens=True))
 ## Related repositories
 
 - Dataset: [`{namespace}/{ds_info['hf_slug']}`](https://huggingface.co/datasets/{namespace}/{ds_info['hf_slug']})
-- SFT checkpoint (previous stage): [`{namespace}/slm-rl-{model_key}-sft-{dataset}`](https://huggingface.co/{namespace}/slm-rl-{model_key}-sft-{dataset})
+- SFT checkpoint (previous stage): [`{namespace}/SLM-RL-Agents`](https://huggingface.co/{namespace}/SLM-RL-Agents) — under `sft/{model_key}/{dataset}/`
 - Code & paper: https://github.com/rezwanh001/slm-rl-agents
 
 ## Citation
 
 ```bibtex
-@misc{{slmrlagent2026,
-  title  = {{Efficiently Enhancing SLM Agents: A Reinforcement Learning Approach to Performance Improvement}},
-  author = {{Haque, Md. Rezwanul and collaborators}},
-  year   = {{2026}},
+@misc{{haque2026slmrlagents,
+  title        = {{Towards Robust Reinforcement Learning for Small-Scale Language Model Agents}},
+  author       = {{Haque, Md Rezwanul and Islam, Md. Milon and Karray, Fakhri}},
+  year         = {{2026}},
   howpublished = {{\\url{{https://github.com/rezwanh001/slm-rl-agents}}}}
 }}
 ```

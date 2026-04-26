@@ -2,6 +2,8 @@
 # SLM-RL-Agents .gitignore
 # =============================================================================
 
+README_Old.md
+
 scripts/generate_figures.py
 scripts/aggregate_results.py
 
