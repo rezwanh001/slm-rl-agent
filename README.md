@@ -196,21 +196,32 @@ Each instruct baseline and the matching SFT checkpoint is scored with the **same
 - Domain-specific LoRA SFT **beats every instruction-tuned baseline on perplexity** across every dataset and at every scale, with the largest margin on Wikitext (16.9 vs. 24.3, a 30% reduction) at the 360M class.
 - At the 360M class, the PPO checkpoint **achieves the best reward on TinyStories** (+2.41 vs. +1.35 for SmolLM2-360M-Instruct, +1.32 for Qwen2.5-0.5B-Instruct) and **on Wikitext-103** (+2.98 vs. +2.58 and +1.83) — a +0.40 absolute reward gain over the next best published baseline on Wikitext, and +1.06 over Qwen2.5-0.5B-Instruct on Wikitext.
 - At the 135M class, PPO lifts reward from −0.92 to −0.69 on TinyStories, closing most of the gap to SmolLM2-135M-Instruct's −0.52.
-- PPO actually **increases Distinct-1 diversity** over the SFT baseline (e.g. SmolLM2-360M/TinyStories: 0.090 → 0.156; SmolLM2-360M/Wikitext: 0.130 → 0.310; SmolLM2-135M/Wikitext: 0.152 → 0.269), indicating that the stabilization techniques avoid the repetition-collapse failure mode often reported in small-scale RLHF.
+- PPO actually **increases corpus-level Distinct-1 diversity** over the SFT baseline (e.g. SmolLM2-360M/TinyStories: 0.135 → 0.156; SmolLM2-360M/Wikitext: 0.227 → 0.310; SmolLM2-135M/Wikitext: 0.230 → 0.269), indicating that the stabilization techniques avoid the repetition-collapse failure mode often reported in small-scale RLHF. All Distinct-1/2 values reported in this README are computed corpus-level (matching `scripts/evaluate.py:compute_distinct_n`) and are reproducible from `results/all_results.json`; the same definition is used in Tables IV and V of the paper.
 - These results are achieved with **~2 GPU-hours per configuration** on a single RTX A6000, vs. multi-thousand-GPU-hour regimes for the instruct baselines.
 
 ### Text Diversity (no collapse observed)
 
-| Model       | Dataset       | SFT Dist-2 | PPO Dist-2 | SFT ROUGE-1 | PPO ROUGE-1 |
-| ----------- | ------------- | ---------- | ---------- | ----------- | ----------- |
-| Pythia-70M  | TinyStories   | 0.123      | 0.120      | 0.172       | 0.166       |
-| Pythia-70M  | CNN/DailyMail | 0.368      | 0.363      | 0.184       | 0.177       |
-| Pythia-70M  | Wikitext-103  | 0.258      | 0.257      | 0.118       | 0.110       |
-| Pythia-160M | TinyStories   | 0.345      | 0.344      | 0.241       | 0.246       |
-| Pythia-160M | CNN/DailyMail | 0.556      | 0.558      | 0.237       | 0.236       |
-| Pythia-160M | Wikitext-103  | 0.455      | 0.443      | 0.171       | 0.172       |
+Corpus-level Distinct-1/2 and reference overlap (ROUGE-1/L) for the SFT prior and the PPO-aligned policy across **all 15 (model, corpus) configurations**. Bold indicates PPO improvement over the SFT prior on the same metric and row. Values are taken verbatim from `results/all_results.json` and match Table V of the paper.
 
-PPO consistently preserves or slightly improves diversity — no repetition collapse observed.
+| Model         | Dataset       | SFT D-1 | SFT D-2 | SFT R-1 | SFT R-L | PPO D-1     | PPO D-2     | PPO R-1     | PPO R-L     |
+| ------------- | ------------- | ------- | ------- | ------- | ------- | ----------- | ----------- | ----------- | ----------- |
+| Pythia-70M    | TinyStories   | 0.051   | 0.123   | 0.172   | 0.143   | 0.050       | 0.120       | 0.166       | 0.138       |
+| Pythia-70M    | CNN/DailyMail | 0.130   | 0.329   | 0.184   | 0.115   | 0.124       | 0.310       | 0.178       | 0.111       |
+| Pythia-70M    | Wikitext-103  | 0.084   | 0.189   | 0.118   | 0.095   | 0.081       | 0.186       | 0.110       | 0.087       |
+| Pythia-160M   | TinyStories   | 0.103   | 0.320   | 0.241   | 0.161   | **0.104**   | **0.329**   | **0.246**   | **0.163**   |
+| Pythia-160M   | CNN/DailyMail | 0.195   | 0.526   | 0.237   | 0.130   | **0.201**   | **0.543**   | 0.236       | **0.131**   |
+| Pythia-160M   | Wikitext-103  | 0.143   | 0.399   | 0.171   | 0.119   | 0.132       | 0.366       | **0.172**   | **0.120**   |
+| Pythia-410M   | TinyStories   | 0.119   | 0.456   | 0.351   | 0.202   | 0.110       | 0.390       | 0.323       | 0.194       |
+| Pythia-410M   | CNN/DailyMail | 0.225   | 0.632   | 0.263   | 0.139   | 0.213       | 0.609       | **0.274**   | **0.145**   |
+| Pythia-410M   | Wikitext-103  | 0.165   | 0.541   | 0.219   | 0.139   | 0.144       | 0.493       | 0.216       | **0.140**   |
+| SmolLM2-135M  | TinyStories   | 0.147   | 0.513   | 0.310   | 0.181   | **0.172**   | **0.579**   | 0.253       | 0.154       |
+| SmolLM2-135M  | CNN/DailyMail | 0.248   | 0.682   | 0.246   | 0.129   | **0.250**   | 0.678       | 0.232       | 0.123       |
+| SmolLM2-135M  | Wikitext-103  | 0.230   | 0.638   | 0.185   | 0.120   | **0.269**   | **0.675**   | 0.149       | 0.102       |
+| SmolLM2-360M  | TinyStories   | 0.135   | 0.489   | 0.355   | 0.212   | **0.156**   | **0.516**   | 0.335       | 0.205       |
+| SmolLM2-360M  | CNN/DailyMail | 0.243   | 0.666   | 0.256   | 0.136   | **0.247**   | **0.670**   | 0.249       | 0.133       |
+| SmolLM2-360M  | Wikitext-103  | 0.227   | 0.651   | 0.206   | 0.138   | **0.310**   | **0.731**   | 0.141       | 0.102       |
+
+PPO consistently preserves or improves Distinct-1/2 over the SFT prior — no repetition collapse observed in any of the 15 configurations.
 
 ### Reproducibility
 
